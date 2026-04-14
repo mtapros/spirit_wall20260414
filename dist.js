@@ -7419,7 +7419,8 @@ var appState = {
   editingIdx: -1,
   iconFile: null,
   cachedIconImage: null,
-  refImageData: null
+  refImageData: null,
+  pendingThumbnailDataUri: null
 };
 
 // modules/dom-helpers.js
@@ -7868,6 +7869,30 @@ function getTileDims() {
   }
   return { tileW, tileH };
 }
+function getTileEditorDims() {
+  const ratioEl = document.getElementById("teTileRatio");
+  const orientEl = document.getElementById("teTileOrientation");
+  const longEl = document.getElementById("teTileLongSide");
+  if (!ratioEl || !orientEl || !longEl) return getTileDims();
+  const ratioStr = ratioEl.value || "1:1";
+  const orientation = orientEl.value || "portrait";
+  const longSide = parseFloat(longEl.value) || 500;
+  const parts = ratioStr.split(":");
+  const rA = parseFloat(parts[0]);
+  const rB = parseFloat(parts[1]);
+  const ratioMax = Math.max(rA, rB);
+  const ratioMin = Math.min(rA, rB);
+  const shortSide = Math.round(longSide * (ratioMin / ratioMax));
+  let tileW, tileH;
+  if (orientation === "landscape") {
+    tileW = longSide;
+    tileH = shortSide;
+  } else {
+    tileW = shortSide;
+    tileH = longSide;
+  }
+  return { tileW, tileH };
+}
 function updateTileDimsLabel() {
   const { tileW, tileH } = getTileDims();
   document.getElementById("tileDimsLabel").textContent = "Tile: " + tileW + " x " + tileH + " px";
@@ -7956,7 +7981,7 @@ function updateLivePreview() {
   if (!parent) return;
   let displayW = parent.clientWidth;
   if (displayW <= 0) displayW = 250;
-  const { tileW, tileH } = getTileDims();
+  const { tileW, tileH } = getTileEditorDims();
   const aspect = tileH / tileW;
   let displayH = Math.round(displayW * aspect);
   if (displayH <= 0) displayH = displayW;
@@ -8828,7 +8853,20 @@ var _onExportTile = (_idx) => {
 function setOnExportTile(fn) {
   _onExportTile = fn;
 }
-var localFS2 = import_uxp4.storage.localFileSystem;
+function getEditorDims() {
+  const ratio = document.getElementById("teTileRatio")?.value || "1:1";
+  const orientation = document.getElementById("teTileOrientation")?.value || "portrait";
+  const longSide = parseFloat(document.getElementById("teTileLongSide")?.value) || 500;
+  return { ratio, orientation, longSide };
+}
+function setEditorDims(ratio, orientation, longSide) {
+  const ratioEl = document.getElementById("teTileRatio");
+  const orientEl = document.getElementById("teTileOrientation");
+  const longEl = document.getElementById("teTileLongSide");
+  if (ratioEl) ratioEl.value = ratio || "1:1";
+  if (orientEl) orientEl.value = orientation || "portrait";
+  if (longEl) longEl.value = longSide || 500;
+}
 function tileLabel(t) {
   switch (t.type) {
     case "phrase-single":
@@ -8888,7 +8926,14 @@ function renderTileList() {
     pill.className = "tile-pill";
     const preview = document.createElement("div");
     preview.className = "pill-preview";
-    preview.style.background = tileBgColor(t);
+    if (t.thumbnailDataUri) {
+      const img = document.createElement("img");
+      img.src = t.thumbnailDataUri;
+      img.style.cssText = "width:100%; height:100%; object-fit:cover; display:block; border-radius:2px;";
+      preview.appendChild(img);
+    } else {
+      preview.style.background = tileBgColor(t);
+    }
     const label = document.createElement("span");
     label.className = "pill-label";
     label.textContent = `${i + 1}. ${tileLabel(t)}`;
@@ -9023,6 +9068,8 @@ async function openEditor(idx) {
     document.getElementById("teType").value = t.type;
     showEditorSection(t.type);
     document.getElementById("tileEditorTitle").textContent = "Edit Tile " + (idx + 1);
+    setEditorDims(t.ratio, t.orientation, t.longSide);
+    appState.pendingThumbnailDataUri = t.thumbnailDataUri || null;
     if (t.type.startsWith("phrase")) {
       document.getElementById("teText").value = t.text || "TEXT";
       document.getElementById("teFont").value = t.font || "Arial Black";
@@ -9065,6 +9112,11 @@ async function openEditor(idx) {
     showEditorSection("phrase-single");
     appState.iconFile = null;
     appState.cachedIconImage = null;
+    appState.pendingThumbnailDataUri = null;
+    const globalRatio = document.getElementById("tileRatio")?.value || "1:1";
+    const globalOrient = document.getElementById("tileOrientation")?.value || "portrait";
+    const globalLong = document.getElementById("tileLongSide")?.value || "500";
+    setEditorDims(globalRatio, globalOrient, parseFloat(globalLong) || 500);
     document.getElementById("teIconName").textContent = "No file chosen";
     document.getElementById("teText").value = "TEXT";
     document.getElementById("teText2").value = "TEXT 2";
@@ -9089,6 +9141,13 @@ async function saveTileFromEditor() {
     return;
   }
   const tile = { type };
+  const dims = getEditorDims();
+  tile.ratio = dims.ratio;
+  tile.orientation = dims.orientation;
+  tile.longSide = dims.longSide;
+  if (appState.pendingThumbnailDataUri) {
+    tile.thumbnailDataUri = appState.pendingThumbnailDataUri;
+  }
   switch (type) {
     case "phrase-single":
     case "phrase-fill":
@@ -9150,6 +9209,10 @@ function buildTileFromEditor() {
   const type = getStr("teType");
   if (!type) return null;
   const tile = { type };
+  const dims = getEditorDims();
+  tile.ratio = dims.ratio;
+  tile.orientation = dims.orientation;
+  tile.longSide = dims.longSide;
   switch (type) {
     case "phrase-single":
     case "phrase-fill":
@@ -9208,7 +9271,16 @@ async function openEditorFromSpec(spec) {
   appState.editingIdx = -1;
   document.getElementById("tileEditor").classList.remove("hidden");
   refreshAllColorFields();
-  document.getElementById("tileEditorTitle").textContent = "New Tile (from spec)";
+  document.getElementById("tileEditorTitle").textContent = "New Tile (from blueprint)";
+  const globalRatio = document.getElementById("tileRatio")?.value || "1:1";
+  const globalOrient = document.getElementById("tileOrientation")?.value || "portrait";
+  const globalLong = document.getElementById("tileLongSide")?.value || "500";
+  setEditorDims(
+    spec.ratio || globalRatio,
+    spec.orientation || globalOrient,
+    spec.longSide || parseFloat(globalLong) || 500
+  );
+  appState.pendingThumbnailDataUri = spec.thumbnailDataUri || null;
   document.getElementById("teType").value = spec.type;
   showEditorSection(spec.type);
   if (spec.type.startsWith("phrase")) {
@@ -9716,10 +9788,10 @@ async function applyTrialWatermarkToActiveDocument(state) {
 }
 
 // modules/generation.js
-var localFS3 = import_uxp5.storage.localFileSystem;
+var localFS2 = import_uxp5.storage.localFileSystem;
 async function getPaperFiles() {
   try {
-    const pluginFolder = await localFS3.getPluginFolder();
+    const pluginFolder = await localFS2.getPluginFolder();
     const assetsFolder = await pluginFolder.getEntry("assets");
     const entries = await assetsFolder.getEntries();
     return entries.filter(
@@ -10314,7 +10386,7 @@ async function apply3DWall() {
 // modules/export.js
 var import_photoshop8 = require("photoshop");
 var import_uxp6 = require("uxp");
-var localFS4 = import_uxp6.storage.localFileSystem;
+var localFS3 = import_uxp6.storage.localFileSystem;
 var exportFolder = null;
 function switchTab(tabName) {
   const btnB = document.getElementById("tabBtnBuilder");
@@ -10359,7 +10431,7 @@ function switchTab(tabName) {
 async function selectExportFolder() {
   if (!await isFeatureAllowed("Export Folder Selection", void 0, "advanced")) return;
   try {
-    const folder = await localFS4.getFolder();
+    const folder = await localFS3.getFolder();
     if (folder) {
       exportFolder = folder;
       document.getElementById("expFolderLabel").textContent = "Selected: " + folder.nativePath;
@@ -10451,7 +10523,7 @@ async function exportHiResTiles() {
 
 // modules/tile-io.js
 var import_uxp7 = require("uxp");
-var localFS5 = import_uxp7.storage.localFileSystem;
+var localFS4 = import_uxp7.storage.localFileSystem;
 async function fileToDataUri(file) {
   if (!file) return null;
   try {
@@ -10478,13 +10550,13 @@ async function serializeTile(tile, embedIcon) {
 }
 async function writeJsonFile(defaultName, data) {
   const json = JSON.stringify(data, null, 2);
-  const file = await localFS5.getFileForSaving(defaultName, { types: ["json"] });
+  const file = await localFS4.getFileForSaving(defaultName, { types: ["json"] });
   if (!file) return false;
   await file.write(json, { format: import_uxp7.storage.formats.utf8 });
   return true;
 }
 async function readJsonFile() {
-  const file = await localFS5.getFileForOpening({ types: ["json"] });
+  const file = await localFS4.getFileForOpening({ types: ["json"] });
   if (!file) return null;
   const text = await file.read({ format: import_uxp7.storage.formats.utf8 });
   return JSON.parse(text);
@@ -10757,6 +10829,21 @@ document.addEventListener("DOMContentLoaded", () => {
   ["teType", "teText", "teText2", "teFont", "teTextScale", "teIconPad", "teGridDivs", "teFrameThick"].forEach((id) => {
     document.getElementById(id).addEventListener("input", markLivePreviewDirty);
     document.getElementById(id).addEventListener("change", markLivePreviewDirty);
+  });
+  ["teTileRatio", "teTileOrientation"].forEach((id) => {
+    document.getElementById(id).addEventListener("change", markLivePreviewDirty);
+  });
+  document.getElementById("teTileLongSide").addEventListener("input", markLivePreviewDirty);
+  document.getElementById("teTileLongSide").addEventListener("change", markLivePreviewDirty);
+  document.getElementById("teSetThumbnailBtn").addEventListener("click", () => {
+    const canvas = document.getElementById("tePreviewCanvas");
+    if (!canvas) return;
+    try {
+      appState.pendingThumbnailDataUri = canvas.toDataURL("image/png");
+      setStatus("Thumbnail set from preview.");
+    } catch (e) {
+      setStatus("Thumbnail capture failed: " + e.message);
+    }
   });
   window.addEventListener("resize", () => {
     if (!document.getElementById("tileEditor").classList.contains("hidden"))

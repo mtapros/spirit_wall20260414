@@ -182,7 +182,7 @@
       padding: 6px; display: flex; align-items: center; gap: 8px; cursor: pointer;
     }
     .tile-pill:hover { border-color: #666; }
-    .pill-preview { width: 20px; height: 20px; border-radius: 2px; border: 1px solid #000; flex-shrink: 0; }
+    .pill-preview { width: 36px; height: 36px; border-radius: 2px; border: 1px solid #000; flex-shrink: 0; overflow: hidden; }
     .pill-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pill-actions { display: flex; gap: 4px; }
     .pill-btn {
@@ -201,7 +201,7 @@
     }
     
     .live-preview-box {
-      width: min(50%, 420px); max-width: 100%; height: 80px; background: #111; border: 1px dashed #555;
+      width: min(25%, 210px); max-width: 100%; height: 80px; background: #111; border: 1px dashed #555;
       margin: 0 auto 10px; border-radius: 4px; position: relative; overflow: hidden;
       display: flex; align-items: center; justify-content: center;
     }
@@ -563,17 +563,41 @@
         <h3 id="tileEditorTitle" style="margin:0; font-size:13px; color:#fff;">Edit Tile</h3>
       </div>
 
-      <!-- Spec import / export -->
+      <!-- Blueprint import / export -->
       <div class="field-row" style="gap:6px; margin-bottom:10px; border-bottom:1px solid #444; padding-bottom:10px;">
-        <button id="btnImportSpec" class="btn" title="Load a tile spec JSON into this editor">&#8679; Import Spec</button>
-        <button id="btnExportSpec" class="btn" title="Save the current editor settings as a lightweight spec JSON">&#8681; Export Spec</button>
+        <button id="btnImportSpec" class="btn" title="Load a tile blueprint JSON into this editor">&#8679; Import Blueprint</button>
+        <button id="btnExportSpec" class="btn" title="Save the current editor settings (including dimensions) as a blueprint JSON">&#8681; Export Blueprint</button>
+      </div>
+
+      <!-- Per-tile dimensions (baked into blueprint) -->
+      <div class="field-row" style="flex-wrap:wrap; gap:8px; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #444;">
+        <label style="font-size:11px;">Ratio:
+          <select id="teTileRatio" style="width:auto;">
+            <option value="1:1" selected>1:1 (Square)</option>
+            <option value="2:3">2:3</option>
+            <option value="5:7">5:7</option>
+            <option value="4:5">4:5</option>
+            <option value="8.5:11">8.5:11 (Letter)</option>
+            <option value="16:9">16:9 (Wide)</option>
+          </select>
+        </label>
+        <label style="font-size:11px;">Orientation:
+          <select id="teTileOrientation" style="width:auto;">
+            <option value="landscape">Landscape</option>
+            <option value="portrait">Portrait</option>
+          </select>
+        </label>
+        <label style="font-size:11px;">Long Side (px): <input type="number" id="teTileLongSide" value="500" style="width:60px;"></label>
       </div>
 
       <div class="live-preview-box">
          <canvas id="tePreviewCanvas" width="400" height="150"></canvas>
          <div id="tePreviewText"></div>
       </div>
-      <button id="tePreviewBtn" class="preview-btn preview-btn-initial">Render Preview</button>
+      <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px;">
+        <button id="tePreviewBtn" class="preview-btn preview-btn-initial">Render Preview</button>
+        <button id="teSetThumbnailBtn" class="btn" style="font-size:10px; padding:3px 7px;" title="Capture the current preview as the tile thumbnail">&#128204; Set as Thumbnail</button>
+      </div>
 
       <div class="field-row">
         <label>Type:

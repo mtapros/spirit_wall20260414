@@ -25,6 +25,33 @@ export function getTileDims() {
   return { tileW, tileH };
 }
 
+// Reads dimensions from the per-tile editor fields (teTileRatio, etc.).
+// Falls back to the global grid fields if the editor fields are absent.
+export function getTileEditorDims() {
+  const ratioEl  = document.getElementById("teTileRatio");
+  const orientEl = document.getElementById("teTileOrientation");
+  const longEl   = document.getElementById("teTileLongSide");
+
+  if (!ratioEl || !orientEl || !longEl) return getTileDims();
+
+  const ratioStr    = ratioEl.value   || "1:1";
+  const orientation = orientEl.value  || "portrait";
+  const longSide    = parseFloat(longEl.value) || 500;
+
+  const parts     = ratioStr.split(":");
+  const rA        = parseFloat(parts[0]);
+  const rB        = parseFloat(parts[1]);
+  const ratioMax  = Math.max(rA, rB);
+  const ratioMin  = Math.min(rA, rB);
+  const shortSide = Math.round(longSide * (ratioMin / ratioMax));
+
+  let tileW, tileH;
+  if (orientation === "landscape") { tileW = longSide; tileH = shortSide; }
+  else                             { tileW = shortSide; tileH = longSide; }
+
+  return { tileW, tileH };
+}
+
 export function updateTileDimsLabel() {
   const { tileW, tileH } = getTileDims();
   document.getElementById("tileDimsLabel").textContent = "Tile: " + tileW + " x " + tileH + " px";

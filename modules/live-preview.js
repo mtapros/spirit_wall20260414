@@ -1,7 +1,7 @@
 import { getVal, getStr }     from './dom-helpers.js';
 import { appState }           from './state.js';
 import { getColorFieldValue } from './color-field.js';
-import { getTileDims }        from './tile-dims.js';
+import { getTileEditorDims }  from './tile-dims.js';
 
 const PREVIEW_BTN_STATES = {
   INITIAL: "initial",
@@ -84,7 +84,7 @@ export function updateLivePreview() {
   let displayW   = parent.clientWidth;
   if (displayW <= 0) displayW = 250;
 
-  const { tileW, tileH } = getTileDims();
+  const { tileW, tileH } = getTileEditorDims();
   const aspect   = tileH / tileW;
   let displayH   = Math.round(displayW * aspect);
   if (displayH <= 0) displayH = displayW;

@@ -295,6 +295,25 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById(id).addEventListener("change", markLivePreviewDirty);
     });
 
+  // Tile-editor dimension inputs also dirty the live preview
+  ["teTileRatio", "teTileOrientation"].forEach(id => {
+    document.getElementById(id).addEventListener("change", markLivePreviewDirty);
+  });
+  document.getElementById("teTileLongSide").addEventListener("input",  markLivePreviewDirty);
+  document.getElementById("teTileLongSide").addEventListener("change", markLivePreviewDirty);
+
+  // "Set as Thumbnail" button — capture canvas PNG into appState
+  document.getElementById("teSetThumbnailBtn").addEventListener("click", () => {
+    const canvas = document.getElementById("tePreviewCanvas");
+    if (!canvas) return;
+    try {
+      appState.pendingThumbnailDataUri = canvas.toDataURL("image/png");
+      setStatus("Thumbnail set from preview.");
+    } catch (e) {
+      setStatus("Thumbnail capture failed: " + e.message);
+    }
+  });
+
   window.addEventListener("resize", () => {
     if (!document.getElementById("tileEditor").classList.contains("hidden"))
       markLivePreviewDirty();

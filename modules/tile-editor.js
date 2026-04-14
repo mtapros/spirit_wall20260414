@@ -12,7 +12,24 @@ import { getLicenseState, getAllowedTileTypes } from './licensing.js';
 let _onExportTile = (_idx) => {};
 export function setOnExportTile(fn) { _onExportTile = fn; }
 
-const localFS = storage.localFileSystem;
+// Reads tile-dimension inputs from the editor (ratio / orientation / longSide).
+function getEditorDims() {
+  const ratio       = (document.getElementById("teTileRatio")?.value)       || "1:1";
+  const orientation = (document.getElementById("teTileOrientation")?.value) || "portrait";
+  const longSide    = parseFloat(document.getElementById("teTileLongSide")?.value) || 500;
+  return { ratio, orientation, longSide };
+}
+
+// Populates tile-dimension inputs in the editor.
+function setEditorDims(ratio, orientation, longSide) {
+  const ratioEl  = document.getElementById("teTileRatio");
+  const orientEl = document.getElementById("teTileOrientation");
+  const longEl   = document.getElementById("teTileLongSide");
+  if (ratioEl)  ratioEl.value  = ratio       || "1:1";
+  if (orientEl) orientEl.value = orientation || "portrait";
+  if (longEl)   longEl.value   = longSide    || 500;
+}
+
 
 export function tileLabel(t) {
   switch (t.type) {
@@ -55,7 +72,14 @@ export function renderTileList() {
 
     const preview = document.createElement("div");
     preview.className        = "pill-preview";
-    preview.style.background = tileBgColor(t);
+    if (t.thumbnailDataUri) {
+      const img = document.createElement("img");
+      img.src = t.thumbnailDataUri;
+      img.style.cssText = "width:100%; height:100%; object-fit:cover; display:block; border-radius:2px;";
+      preview.appendChild(img);
+    } else {
+      preview.style.background = tileBgColor(t);
+    }
 
     const label = document.createElement("span");
     label.className   = "pill-label";
@@ -165,6 +189,12 @@ export async function openEditor(idx) {
     showEditorSection(t.type);
     document.getElementById("tileEditorTitle").textContent = "Edit Tile " + (idx + 1);
 
+    // Restore tile-specific dimensions
+    setEditorDims(t.ratio, t.orientation, t.longSide);
+
+    // Restore thumbnail
+    appState.pendingThumbnailDataUri = t.thumbnailDataUri || null;
+
     if (t.type.startsWith("phrase")) {
       document.getElementById("teText").value       = t.text  || "TEXT";
       document.getElementById("teFont").value       = t.font  || "Arial Black";
@@ -208,6 +238,13 @@ export async function openEditor(idx) {
     document.getElementById("teType").value                = "phrase-single";
     showEditorSection("phrase-single");
     appState.iconFile = null; appState.cachedIconImage = null;
+    appState.pendingThumbnailDataUri = null;
+
+    // Default dims: fall back to global grid settings
+    const globalRatio  = document.getElementById("tileRatio")?.value       || "1:1";
+    const globalOrient = document.getElementById("tileOrientation")?.value || "portrait";
+    const globalLong   = document.getElementById("tileLongSide")?.value    || "500";
+    setEditorDims(globalRatio, globalOrient, parseFloat(globalLong) || 500);
     document.getElementById("teIconName").textContent  = "No file chosen";
     document.getElementById("teText").value            = "TEXT";
     document.getElementById("teText2").value           = "TEXT 2";
@@ -231,6 +268,17 @@ export async function saveTileFromEditor() {
     return;
   }
   const tile = { type };
+
+  // Bake tile dimensions (blueprint info) into every tile
+  const dims = getEditorDims();
+  tile.ratio       = dims.ratio;
+  tile.orientation = dims.orientation;
+  tile.longSide    = dims.longSide;
+
+  // Persist thumbnail if one was captured
+  if (appState.pendingThumbnailDataUri) {
+    tile.thumbnailDataUri = appState.pendingThumbnailDataUri;
+  }
 
   switch (type) {
     case "phrase-single": case "phrase-fill": case "phrase-multiline":
@@ -279,6 +327,12 @@ export function buildTileFromEditor() {
   if (!type) return null;
   const tile = { type };
 
+  // Include blueprint dimensions
+  const dims = getEditorDims();
+  tile.ratio       = dims.ratio;
+  tile.orientation = dims.orientation;
+  tile.longSide    = dims.longSide;
+
   switch (type) {
     case "phrase-single": case "phrase-fill": case "phrase-multiline":
       tile.text      = getStr("teText");  tile.font      = getStr("teFont");
@@ -324,7 +378,20 @@ export async function openEditorFromSpec(spec) {
   appState.editingIdx = -1;
   document.getElementById("tileEditor").classList.remove("hidden");
   refreshAllColorFields();
-  document.getElementById("tileEditorTitle").textContent = "New Tile (from spec)";
+  document.getElementById("tileEditorTitle").textContent = "New Tile (from blueprint)";
+
+  // Restore tile dimensions from the spec/blueprint
+  const globalRatio  = document.getElementById("tileRatio")?.value       || "1:1";
+  const globalOrient = document.getElementById("tileOrientation")?.value || "portrait";
+  const globalLong   = document.getElementById("tileLongSide")?.value    || "500";
+  setEditorDims(
+    spec.ratio       || globalRatio,
+    spec.orientation || globalOrient,
+    spec.longSide    || parseFloat(globalLong) || 500
+  );
+
+  // Restore thumbnail
+  appState.pendingThumbnailDataUri = spec.thumbnailDataUri || null;
 
   document.getElementById("teType").value = spec.type;
   showEditorSection(spec.type);
