@@ -191,6 +191,54 @@ function computeInstanceName() {
 }
 
 // =========================================================
+//  MACHINE FINGERPRINT (for trial anti-abuse)
+// =========================================================
+
+export function computeMachineFingerprint() {
+  try {
+    const hn = os.hostname() || "unknown";
+    // Simple stable hash of the hostname
+    let h = 0x811c9dc5;
+    for (let i = 0; i < hn.length; i++) {
+      h ^= hn.charCodeAt(i);
+      h = (h * 0x01000193) >>> 0;
+    }
+    return hn.slice(0, 12).replace(/[^a-zA-Z0-9]/g, "_") + "_" + h.toString(16).padStart(8, "0");
+  } catch (_) {
+    return "unknown_00000000";
+  }
+}
+
+// Ask the CF Worker for the canonical trial start date for this machine.
+// Returns { trialStartedAt: number } or null (e.g. network error / not yet registered).
+export async function fetchTrialAnchor(fingerprint) {
+  try {
+    const result = await workerPost("/v1/trial/anchor", { fingerprint });
+    if (result && typeof result.trialStartedAt === "number") {
+      return { trialStartedAt: result.trialStartedAt };
+    }
+    return null;
+  } catch (_) {
+    return null; // offline or server error — fall back to local data
+  }
+}
+
+// Register a new trial start date with the server (only called once per machine).
+// Returns { trialStartedAt: number } with the server-canonical value.
+export async function registerTrialAnchor(fingerprint, trialStartedAt) {
+  try {
+    const result = await workerPost("/v1/trial/register", { fingerprint, trialStartedAt });
+    if (result && typeof result.trialStartedAt === "number") {
+      return { trialStartedAt: result.trialStartedAt };
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+
+// =========================================================
 //  WORKER FETCH HELPER
 // =========================================================
 

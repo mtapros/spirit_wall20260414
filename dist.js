@@ -7973,6 +7973,151 @@ function renderLivePreview() {
   hasRenderedPreview = true;
   setPreviewButtonState(PREVIEW_BTN_STATES.CURRENT);
 }
+function renderPhraseToCanvas(ctx, w, h, type, text1, text2, font, scale, tColor, bColor, altTColor, altBColor) {
+  ctx.fillStyle = bColor;
+  ctx.fillRect(0, 0, w, h);
+  ctx.textBaseline = "middle";
+  if (type === "phrase-single") {
+    const fs = Math.floor(Math.min(w * scale / ((text1.length || 1) * 0.6), h * scale));
+    ctx.font = `bold ${fs}px '${font}', sans-serif`;
+    ctx.fillStyle = tColor;
+    ctx.textAlign = "center";
+    ctx.fillText(text1, w / 2, h / 2);
+  } else if (type === "phrase-fill" || type === "phrase-fillcolor" || type === "phrase-altwords") {
+    const longestStr = type === "phrase-altwords" && text2.length > text1.length ? text2 : text1;
+    const fs2 = Math.floor(w * scale / ((longestStr.length || 1) * 0.6));
+    const numLines = Math.max(1, Math.floor(h / (fs2 * 1.25)));
+    const evenH = h / numLines;
+    ctx.font = `bold ${fs2}px '${font}', sans-serif`;
+    ctx.textAlign = "center";
+    for (let i = 0; i < numLines; i++) {
+      const isAlt = i % 2 === 1;
+      if (isAlt && altBColor) {
+        ctx.fillStyle = altBColor;
+        ctx.fillRect(0, i * evenH, w, evenH);
+      }
+      ctx.fillStyle = isAlt ? altTColor || tColor : tColor;
+      ctx.fillText(
+        type === "phrase-altwords" && isAlt ? text2 : text1,
+        w / 2,
+        i * evenH + evenH / 2
+      );
+    }
+  } else if (type === "phrase-multiline") {
+    const words = text1.split(/\s+/);
+    const longestWord = words.reduce((a, b) => a.length > b.length ? a : b, "");
+    const maxCharW = w * scale, maxH2 = h * scale;
+    let maxFsWord = Math.floor(maxCharW / ((longestWord.length || 1) * 0.6));
+    let fsArea = Math.floor(Math.sqrt(maxCharW * maxH2 / ((text1.length || 1) * 0.72)));
+    let fs3 = Math.min(maxFsWord, fsArea, Math.floor(maxH2));
+    let lh, blockH, linesToDraw = [];
+    while (fs3 > 4) {
+      lh = fs3 * 1.2;
+      const charsPerLine = Math.max(1, Math.floor(maxCharW / (fs3 * 0.6)));
+      linesToDraw = [];
+      let currentLine = [], currLen = 0;
+      for (let wi = 0; wi < words.length; wi++) {
+        const wd = words[wi];
+        if (currLen === 0) {
+          currentLine.push(wd);
+          currLen = wd.length;
+        } else if (currLen + 1 + wd.length > charsPerLine) {
+          linesToDraw.push(currentLine.join(" "));
+          currentLine = [wd];
+          currLen = wd.length;
+        } else {
+          currentLine.push(wd);
+          currLen += 1 + wd.length;
+        }
+      }
+      if (currentLine.length > 0) linesToDraw.push(currentLine.join(" "));
+      blockH = linesToDraw.length * lh;
+      if (blockH <= maxH2) break;
+      fs3--;
+    }
+    ctx.font = `bold ${fs3}px '${font}', sans-serif`;
+    ctx.fillStyle = tColor;
+    ctx.textAlign = "center";
+    const startY = (h - linesToDraw.length * (fs3 * 1.2)) / 2 + fs3 * 0.6;
+    for (let li = 0; li < linesToDraw.length; li++) {
+      ctx.fillText(linesToDraw[li], w / 2, startY + li * (fs3 * 1.2));
+    }
+  }
+}
+function capturePreviewToDataUri() {
+  const liveCanvas = document.getElementById("tePreviewCanvas");
+  if (!liveCanvas) return null;
+  const w = liveCanvas.width || 200;
+  const h = liveCanvas.height || 200;
+  const offscreen = document.createElement("canvas");
+  offscreen.width = w;
+  offscreen.height = h;
+  const ctx = offscreen.getContext("2d");
+  if (!ctx) return null;
+  const { tileW } = getTileEditorDims();
+  const type = getStr("teType");
+  const fillRect = (color, rx, ry, rw, rh) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(rx, ry, rw, rh);
+  };
+  if (type === "solid") {
+    fillRect(getColorFieldValue("teSolidColor"), 0, 0, w, h);
+  } else if (type === "solid-framed") {
+    fillRect(getColorFieldValue("teFrameColor"), 0, 0, w, h);
+    const thickPct = (getVal("teFrameThick") || 10) / 100;
+    const tx = w * thickPct, ty = h * thickPct;
+    fillRect(getColorFieldValue("teSolidColor"), tx, ty, w - tx * 2, h - ty * 2);
+  } else if (type === "checkerboard") {
+    const cA = getColorFieldValue("teCheckA"), cB = getColorFieldValue("teCheckB");
+    fillRect(cA, 0, 0, w, h);
+    const divs = getVal("teGridDivs") || 4;
+    const cellW = w / divs, cellH = h / divs;
+    for (let r = 0; r < divs; r++) {
+      for (let c = 0; c < divs; c++) {
+        if ((r + c) % 2 === 1) {
+          fillRect(
+            cB,
+            Math.round(c * cellW),
+            Math.round(r * cellH),
+            Math.round((c + 1) * cellW) - Math.round(c * cellW),
+            Math.round((r + 1) * cellH) - Math.round(r * cellH)
+          );
+        }
+      }
+    }
+  } else if (type.startsWith("icon")) {
+    fillRect(getColorFieldValue("teIconBg"), 0, 0, w, h);
+    if (appState.cachedIconImage) {
+      const isGrid = type === "icon-grid";
+      const divs2 = isGrid ? getVal("teGridDivs") || 2 : 1;
+      const cellW2 = w / divs2, cellH2 = h / divs2;
+      const pad = (getVal("teIconPad") || 0) * (w / (tileW || 400));
+      const fitW = Math.max(1, cellW2 - pad * 2), fitH = Math.max(1, cellH2 - pad * 2);
+      const scale = Math.min(fitW / appState.cachedIconImage.width, fitH / appState.cachedIconImage.height);
+      const dw = appState.cachedIconImage.width * scale, dh = appState.cachedIconImage.height * scale;
+      for (let r = 0; r < divs2; r++) {
+        for (let c = 0; c < divs2; c++) {
+          ctx.drawImage(appState.cachedIconImage, c * cellW2 + (cellW2 - dw) / 2, r * cellH2 + (cellH2 - dh) / 2, dw, dh);
+        }
+      }
+    }
+  } else if (type.startsWith("phrase")) {
+    const text1 = getStr("teText").toUpperCase() || "TEXT";
+    const text2 = getStr("teText2").toUpperCase() || "TEXT 2";
+    const font = getStr("teFont") || "Arial";
+    const scale = (getVal("teTextScale") || 80) / 100;
+    const tColor = getColorFieldValue("teTextColor");
+    const bColor = getColorFieldValue("teBgColor");
+    const altTColor = type === "phrase-fillcolor" || type === "phrase-altwords" ? getColorFieldValue("teAltTextColor") : tColor;
+    const altBColor = type === "phrase-fillcolor" || type === "phrase-altwords" ? getColorFieldValue("teAltBgColor") : null;
+    renderPhraseToCanvas(ctx, w, h, type, text1, text2, font, scale, tColor, bColor, altTColor, altBColor);
+  }
+  try {
+    return offscreen.toDataURL("image/png");
+  } catch (_) {
+    return null;
+  }
+}
 function updateLivePreview() {
   const canvas = document.getElementById("tePreviewCanvas");
   const overlay = document.getElementById("tePreviewText");
@@ -8312,6 +8457,41 @@ function computeInstanceName() {
     return "Photoshop on Unknown";
   }
 }
+function computeMachineFingerprint() {
+  try {
+    const hn = import_os.default.hostname() || "unknown";
+    let h = 2166136261;
+    for (let i = 0; i < hn.length; i++) {
+      h ^= hn.charCodeAt(i);
+      h = h * 16777619 >>> 0;
+    }
+    return hn.slice(0, 12).replace(/[^a-zA-Z0-9]/g, "_") + "_" + h.toString(16).padStart(8, "0");
+  } catch (_) {
+    return "unknown_00000000";
+  }
+}
+async function fetchTrialAnchor(fingerprint) {
+  try {
+    const result = await workerPost("/v1/trial/anchor", { fingerprint });
+    if (result && typeof result.trialStartedAt === "number") {
+      return { trialStartedAt: result.trialStartedAt };
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+async function registerTrialAnchor(fingerprint, trialStartedAt) {
+  try {
+    const result = await workerPost("/v1/trial/register", { fingerprint, trialStartedAt });
+    if (result && typeof result.trialStartedAt === "number") {
+      return { trialStartedAt: result.trialStartedAt };
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
 async function workerPost(path, body) {
   const payload = body && typeof body === "object" ? body : {};
   const resp = await fetch(WORKER_BASE_URL + path, {
@@ -8588,10 +8768,28 @@ function getModeFromParts({ trialActive, trialExpired, paidTier, graceRemaining,
   return MODE.UNLICENSED;
 }
 async function initLicensing() {
+  const fingerprint = computeMachineFingerprint();
   let trial = await loadTrialData();
   if (!trial || !trial.trialStartedAt) {
-    trial = { trialStartedAt: Date.now() };
+    const serverAnchor = await fetchTrialAnchor(fingerprint);
+    if (serverAnchor) {
+      trial = { trialStartedAt: serverAnchor.trialStartedAt, fingerprint };
+    } else {
+      trial = { trialStartedAt: Date.now(), fingerprint };
+      registerTrialAnchor(fingerprint, trial.trialStartedAt).then((serverResult) => {
+        if (serverResult && serverResult.trialStartedAt !== trial.trialStartedAt) {
+          trial.trialStartedAt = serverResult.trialStartedAt;
+          saveTrialData(trial);
+        }
+      }).catch(() => {
+      });
+    }
     await saveTrialData(trial);
+  } else if (!trial.fingerprint) {
+    trial.fingerprint = fingerprint;
+    await saveTrialData(trial);
+    registerTrialAnchor(fingerprint, trial.trialStartedAt).catch(() => {
+    });
   }
   return getLicenseState(trial);
 }
@@ -8658,7 +8856,7 @@ function getCapabilities(state) {
   return {
     version,
     canGenerate: state.mode !== MODE.TRIAL_EXPIRED && state.mode !== MODE.UNLICENSED,
-    requiresWatermark: state.mode === MODE.TRIAL_ACTIVE,
+    requiresWatermark: false,
     canUse3D: proOrHigher,
     canUseReflection: proOrHigher,
     canUsePaper: advancedOrTrial,
@@ -8830,7 +9028,7 @@ function applyLicenseStateToUI(state) {
   }
   if (state.mode === MODE.TRIAL_ACTIVE) {
     setStatusTone("status-trial");
-    setStatusText("Trial active \u2014 " + state.daysLeft + " day(s) remaining. Output will be watermarked until you purchase.");
+    setStatusText("Trial active \u2014 " + state.daysLeft + " day(s) remaining. Purchase to continue after trial ends.");
     return;
   }
   if (state.mode === MODE.OFFLINE_GRACE) {
@@ -9762,8 +9960,8 @@ async function rotateActiveLayer(deg) {
     angle: { _unit: "angleUnit", _value: deg }
   }], { synchronousExecution: true });
 }
-function shouldApplyWatermark(state) {
-  return !!(state && state.mode === "TRIAL_ACTIVE" && !state.licensed);
+function shouldApplyWatermark(_state) {
+  return false;
 }
 async function applyTrialWatermarkToActiveDocument(state) {
   if (!shouldApplyWatermark(state)) return false;
@@ -10836,10 +11034,13 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("teTileLongSide").addEventListener("input", markLivePreviewDirty);
   document.getElementById("teTileLongSide").addEventListener("change", markLivePreviewDirty);
   document.getElementById("teSetThumbnailBtn").addEventListener("click", () => {
-    const canvas = document.getElementById("tePreviewCanvas");
-    if (!canvas) return;
     try {
-      appState.pendingThumbnailDataUri = canvas.toDataURL("image/png");
+      const dataUri = capturePreviewToDataUri();
+      if (!dataUri) {
+        setStatus("Render the preview first, then set as thumbnail.");
+        return;
+      }
+      appState.pendingThumbnailDataUri = dataUri;
       setStatus("Thumbnail set from preview.");
     } catch (e) {
       setStatus("Thumbnail capture failed: " + e.message);

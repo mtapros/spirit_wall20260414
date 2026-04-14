@@ -1,6 +1,12 @@
 import { storage } from "uxp";
 import { app } from "photoshop";
-import { loadLicenseData, computeOfflineGraceRemaining } from "./license.js";
+import {
+  loadLicenseData,
+  computeOfflineGraceRemaining,
+  computeMachineFingerprint,
+  fetchTrialAnchor,
+  registerTrialAnchor,
+} from "./license.js";
 
 const TRIAL_FILE_NAME = "trial.json";
 const TRIAL_DAYS = 7;
@@ -101,11 +107,35 @@ function getModeFromParts({ trialActive, trialExpired, paidTier, graceRemaining,
 }
 
 export async function initLicensing() {
+  const fingerprint = computeMachineFingerprint();
   let trial = await loadTrialData();
+
   if (!trial || !trial.trialStartedAt) {
-    trial = { trialStartedAt: Date.now() };
+    // No local trial data — ask the server if this machine already has a record.
+    const serverAnchor = await fetchTrialAnchor(fingerprint);
+    if (serverAnchor) {
+      // Machine already started a trial on a previous install — use the original date.
+      trial = { trialStartedAt: serverAnchor.trialStartedAt, fingerprint };
+    } else {
+      // Genuinely first run — create a new trial and register it.
+      trial = { trialStartedAt: Date.now(), fingerprint };
+      // Register asynchronously; if it fails we still have local data.
+      registerTrialAnchor(fingerprint, trial.trialStartedAt).then(serverResult => {
+        if (serverResult && serverResult.trialStartedAt !== trial.trialStartedAt) {
+          // Server returned a different (earlier) start date — update local record.
+          trial.trialStartedAt = serverResult.trialStartedAt;
+          saveTrialData(trial);
+        }
+      }).catch(() => {});
+    }
     await saveTrialData(trial);
+  } else if (!trial.fingerprint) {
+    // Existing local record without a fingerprint — backfill and re-register.
+    trial.fingerprint = fingerprint;
+    await saveTrialData(trial);
+    registerTrialAnchor(fingerprint, trial.trialStartedAt).catch(() => {});
   }
+
   return getLicenseState(trial);
 }
 
@@ -180,7 +210,7 @@ export function getCapabilities(state) {
   return {
     version,
     canGenerate: state.mode !== MODE.TRIAL_EXPIRED && state.mode !== MODE.UNLICENSED,
-    requiresWatermark: state.mode === MODE.TRIAL_ACTIVE,
+    requiresWatermark: false,
     canUse3D: proOrHigher,
     canUseReflection: proOrHigher,
     canUsePaper: advancedOrTrial,
@@ -369,7 +399,7 @@ export function applyLicenseStateToUI(state) {
   }
   if (state.mode === MODE.TRIAL_ACTIVE) {
     setStatusTone("status-trial");
-    setStatusText("Trial active — " + state.daysLeft + " day(s) remaining. Output will be watermarked until you purchase.");
+    setStatusText("Trial active — " + state.daysLeft + " day(s) remaining. Purchase to continue after trial ends.");
     return;
   }
   if (state.mode === MODE.OFFLINE_GRACE) {

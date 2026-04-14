@@ -33,6 +33,7 @@ import {
 import {
   initLivePreviewButton,
   markLivePreviewDirty,
+  capturePreviewToDataUri,
 } from './modules/live-preview.js';
 
 import {
@@ -304,10 +305,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // "Set as Thumbnail" button — capture canvas PNG into appState
   document.getElementById("teSetThumbnailBtn").addEventListener("click", () => {
-    const canvas = document.getElementById("tePreviewCanvas");
-    if (!canvas) return;
     try {
-      appState.pendingThumbnailDataUri = canvas.toDataURL("image/png");
+      const dataUri = capturePreviewToDataUri();
+      if (!dataUri) { setStatus("Render the preview first, then set as thumbnail."); return; }
+      appState.pendingThumbnailDataUri = dataUri;
       setStatus("Thumbnail set from preview.");
     } catch (e) {
       setStatus("Thumbnail capture failed: " + e.message);

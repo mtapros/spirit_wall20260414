@@ -22,8 +22,9 @@ async function rotateActiveLayer(deg) {
   }], { synchronousExecution: true });
 }
 
-function shouldApplyWatermark(state) {
-  return !!(state && state.mode === "TRIAL_ACTIVE" && !state.licensed);
+function shouldApplyWatermark(_state) {
+  // Watermarking is disabled — full functionality is available during trial.
+  return false;
 }
 
 export async function applyTrialWatermarkToActiveDocument(state) {
