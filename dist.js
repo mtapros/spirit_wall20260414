@@ -7409,7 +7409,7 @@ var require_jpeg_js = __commonJS({
 
 // main.js
 var import_photoshop9 = require("photoshop");
-var import_uxp7 = require("uxp");
+var import_uxp8 = require("uxp");
 
 // modules/state.js
 var palette = [];
@@ -8823,6 +8823,11 @@ function applyLicenseStateToUI(state) {
 }
 
 // modules/tile-editor.js
+var _onExportTile = (_idx) => {
+};
+function setOnExportTile(fn) {
+  _onExportTile = fn;
+}
 var localFS2 = import_uxp4.storage.localFileSystem;
 function tileLabel(t) {
   switch (t.type) {
@@ -8904,9 +8909,18 @@ function renderTileList() {
       tiles.splice(i, 1);
       renderTileList();
     });
+    const exportBtn = document.createElement("button");
+    exportBtn.className = "pill-btn";
+    exportBtn.title = "Export tile (with all assets)";
+    exportBtn.textContent = "\u2B07";
+    exportBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      _onExportTile(i);
+    });
     const actions = document.createElement("span");
     actions.className = "pill-actions";
     actions.appendChild(editBtn);
+    actions.appendChild(exportBtn);
     actions.appendChild(delBtn);
     pill.appendChild(preview);
     pill.appendChild(label);
@@ -8982,6 +8996,24 @@ async function cacheIconImage(file) {
     appState.cachedIconImage = null;
   }
 }
+function loadCachedIconFromDataUri(dataUri) {
+  if (!dataUri) {
+    appState.cachedIconImage = null;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      appState.cachedIconImage = img;
+      resolve();
+    };
+    img.onerror = () => {
+      appState.cachedIconImage = null;
+      resolve();
+    };
+    img.src = dataUri;
+  });
+}
 async function openEditor(idx) {
   appState.editingIdx = idx;
   document.getElementById("tileEditor").classList.remove("hidden");
@@ -9009,7 +9041,13 @@ async function openEditor(idx) {
       if (t.type === "icon-grid") document.getElementById("teGridDivs").value = t.gridDivs || 2;
       document.getElementById("teIconName").textContent = t.iconName || "No file";
       appState.iconFile = t.iconFile || null;
-      await cacheIconImage(appState.iconFile);
+      if (t.iconFile) {
+        await cacheIconImage(t.iconFile);
+      } else if (t.iconDataUri) {
+        await loadCachedIconFromDataUri(t.iconDataUri);
+      } else {
+        appState.cachedIconImage = null;
+      }
     } else if (t.type.startsWith("solid")) {
       setColorFieldValue("teSolidColor", t.solidColor || "#000000");
       if (t.type === "solid-framed") {
@@ -9107,6 +9145,108 @@ async function saveTileFromEditor() {
   document.getElementById("tileEditor").classList.add("hidden");
   appState.editingIdx = -1;
   renderTileList();
+}
+function buildTileFromEditor() {
+  const type = getStr("teType");
+  if (!type) return null;
+  const tile = { type };
+  switch (type) {
+    case "phrase-single":
+    case "phrase-fill":
+    case "phrase-multiline":
+      tile.text = getStr("teText");
+      tile.font = getStr("teFont");
+      tile.textScale = getVal("teTextScale");
+      tile.textColor = getColorFieldValue("teTextColor");
+      tile.bgColor = getColorFieldValue("teBgColor");
+      break;
+    case "phrase-fillcolor":
+      tile.text = getStr("teText");
+      tile.font = getStr("teFont");
+      tile.textScale = getVal("teTextScale");
+      tile.textColor = getColorFieldValue("teTextColor");
+      tile.bgColor = getColorFieldValue("teBgColor");
+      tile.altTextColor = getColorFieldValue("teAltTextColor");
+      tile.altBgColor = getColorFieldValue("teAltBgColor");
+      break;
+    case "phrase-altwords":
+      tile.text = getStr("teText");
+      tile.text2 = getStr("teText2");
+      tile.font = getStr("teFont");
+      tile.textScale = getVal("teTextScale");
+      tile.textColor = getColorFieldValue("teTextColor");
+      tile.bgColor = getColorFieldValue("teBgColor");
+      tile.altTextColor = getColorFieldValue("teAltTextColor");
+      tile.altBgColor = getColorFieldValue("teAltBgColor");
+      break;
+    case "icon":
+    case "icon-grid":
+      tile.iconFile = appState.iconFile;
+      tile.iconName = document.getElementById("teIconName").textContent;
+      tile.iconBg = getColorFieldValue("teIconBg");
+      tile.iconPad = getVal("teIconPad");
+      if (type === "icon-grid") tile.gridDivs = getVal("teGridDivs");
+      break;
+    case "solid":
+      tile.solidColor = getColorFieldValue("teSolidColor");
+      break;
+    case "solid-framed":
+      tile.solidColor = getColorFieldValue("teSolidColor");
+      tile.frameColor = getColorFieldValue("teFrameColor");
+      tile.frameThickness = getVal("teFrameThick");
+      break;
+    case "checkerboard":
+      tile.checkA = getColorFieldValue("teCheckA");
+      tile.checkB = getColorFieldValue("teCheckB");
+      tile.gridDivs = getVal("teGridDivs");
+      break;
+  }
+  return tile;
+}
+async function openEditorFromSpec(spec) {
+  if (!spec || !spec.type) return;
+  appState.editingIdx = -1;
+  document.getElementById("tileEditor").classList.remove("hidden");
+  refreshAllColorFields();
+  document.getElementById("tileEditorTitle").textContent = "New Tile (from spec)";
+  document.getElementById("teType").value = spec.type;
+  showEditorSection(spec.type);
+  if (spec.type.startsWith("phrase")) {
+    document.getElementById("teText").value = spec.text || "TEXT";
+    document.getElementById("teFont").value = spec.font || "Arial Black";
+    document.getElementById("teTextScale").value = spec.textScale || 80;
+    setColorFieldValue("teTextColor", spec.textColor || "#000000");
+    setColorFieldValue("teBgColor", spec.bgColor || "#ffffff");
+    if (spec.type === "phrase-altwords")
+      document.getElementById("teText2").value = spec.text2 || "TEXT 2";
+    if (spec.type === "phrase-fillcolor" || spec.type === "phrase-altwords") {
+      setColorFieldValue("teAltTextColor", spec.altTextColor || "#ffffff");
+      setColorFieldValue("teAltBgColor", spec.altBgColor || "#000000");
+    }
+  } else if (spec.type.startsWith("icon")) {
+    setColorFieldValue("teIconBg", spec.iconBg || "#ffffff");
+    document.getElementById("teIconPad").value = spec.iconPad || 20;
+    if (spec.type === "icon-grid") document.getElementById("teGridDivs").value = spec.gridDivs || 2;
+    document.getElementById("teIconName").textContent = spec.iconName || "No file";
+    appState.iconFile = null;
+    if (spec.iconDataUri) {
+      await loadCachedIconFromDataUri(spec.iconDataUri);
+    } else {
+      appState.cachedIconImage = null;
+    }
+  } else if (spec.type.startsWith("solid")) {
+    setColorFieldValue("teSolidColor", spec.solidColor || "#000000");
+    if (spec.type === "solid-framed") {
+      setColorFieldValue("teFrameColor", spec.frameColor || "#000000");
+      document.getElementById("teFrameThick").value = spec.frameThickness || 10;
+    }
+  } else if (spec.type === "checkerboard") {
+    setColorFieldValue("teCheckA", spec.checkA || "#ffffff");
+    setColorFieldValue("teCheckB", spec.checkB || "#000000");
+    document.getElementById("teGridDivs").value = spec.gridDivs || 4;
+  }
+  document.getElementById("tileEditor").scrollIntoView({ behavior: "smooth", block: "start" });
+  resetLivePreviewState();
 }
 
 // modules/generation.js
@@ -10178,24 +10318,32 @@ var localFS4 = import_uxp6.storage.localFileSystem;
 var exportFolder = null;
 function switchTab(tabName) {
   const btnB = document.getElementById("tabBtnBuilder");
+  const btnT = document.getElementById("tabBtnTiles");
   const btnE = document.getElementById("tabBtnExport");
   const btnL = document.getElementById("tabBtnLicense");
   const viewB = document.getElementById("viewBuilder");
+  const viewT = document.getElementById("viewTiles");
   const viewE = document.getElementById("viewExport");
   const viewL = document.getElementById("viewLicense");
-  [btnB, btnE, btnL].forEach((b) => {
+  [btnB, btnT, btnE, btnL].forEach((b) => {
     if (b) {
       b.style.background = "transparent";
       b.style.color = "#aaa";
     }
   });
-  [viewB, viewE, viewL].forEach((v) => {
+  [viewB, viewT, viewE, viewL].forEach((v) => {
     if (v) v.style.display = "none";
   });
   if (tabName === "Builder") {
     btnB.style.background = "#2680eb";
     btnB.style.color = "#fff";
     viewB.style.display = "block";
+  } else if (tabName === "Tiles") {
+    if (btnT) {
+      btnT.style.background = "#2680eb";
+      btnT.style.color = "#fff";
+    }
+    if (viewT) viewT.style.display = "block";
   } else if (tabName === "Export") {
     btnE.style.background = "#2680eb";
     btnE.style.color = "#fff";
@@ -10301,6 +10449,147 @@ async function exportHiResTiles() {
   }
 }
 
+// modules/tile-io.js
+var import_uxp7 = require("uxp");
+var localFS5 = import_uxp7.storage.localFileSystem;
+async function fileToDataUri(file) {
+  if (!file) return null;
+  try {
+    const data = await file.read({ format: import_uxp7.storage.formats.binary });
+    const bytes = new Uint8Array(data instanceof ArrayBuffer ? data : data.buffer || data);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const base64 = btoa(binary);
+    const ext = (file.name || "").toLowerCase().split(".").pop();
+    const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : "image/png";
+    return "data:" + mime + ";base64," + base64;
+  } catch (e) {
+    console.error("fileToDataUri failed:", e);
+    return null;
+  }
+}
+async function serializeTile(tile, embedIcon) {
+  const t = Object.assign({}, tile);
+  delete t.iconFile;
+  if (embedIcon && tile.iconFile) {
+    t.iconDataUri = await fileToDataUri(tile.iconFile);
+  }
+  return t;
+}
+async function writeJsonFile(defaultName, data) {
+  const json = JSON.stringify(data, null, 2);
+  const file = await localFS5.getFileForSaving(defaultName, { types: ["json"] });
+  if (!file) return false;
+  await file.write(json, { format: import_uxp7.storage.formats.utf8 });
+  return true;
+}
+async function readJsonFile() {
+  const file = await localFS5.getFileForOpening({ types: ["json"] });
+  if (!file) return null;
+  const text = await file.read({ format: import_uxp7.storage.formats.utf8 });
+  return JSON.parse(text);
+}
+async function exportEditorSpec(buildFn) {
+  try {
+    const tile = buildFn();
+    if (!tile) return;
+    const spec = await serializeTile(tile, false);
+    const ok = await writeJsonFile(
+      "tile-spec-" + tile.type + ".json",
+      { version: 1, type: "tilespec", spec }
+    );
+    if (ok) setStatus("Spec exported.");
+  } catch (e) {
+    setStatus("Export failed: " + e.message);
+  }
+}
+async function exportTile(idx) {
+  const tile = tiles[idx];
+  if (!tile) return;
+  try {
+    const tileData = await serializeTile(tile, true);
+    const ok = await writeJsonFile(
+      "tile-" + (idx + 1) + "-" + tile.type + ".json",
+      { version: 1, type: "tile", tile: tileData }
+    );
+    if (ok) setStatus("Tile exported.");
+  } catch (e) {
+    setStatus("Export failed: " + e.message);
+  }
+}
+async function exportAllTiles() {
+  if (tiles.length === 0) {
+    setStatus("No tiles to export.");
+    return;
+  }
+  try {
+    const serialized = await Promise.all(tiles.map((t) => serializeTile(t, true)));
+    const ok = await writeJsonFile(
+      "tiles-pack.json",
+      { version: 1, type: "tilepack", tiles: serialized }
+    );
+    if (ok) setStatus("Tile pack exported (" + tiles.length + " tile(s)).");
+  } catch (e) {
+    setStatus("Export failed: " + e.message);
+  }
+}
+async function importTile() {
+  try {
+    const data = await readJsonFile();
+    if (!data) return;
+    if (data.type === "tilespec" && data.spec) {
+      await openEditorFromSpec(data.spec);
+      setStatus("Spec loaded into editor.");
+    } else if (data.type === "tile" && data.tile) {
+      tiles.push(data.tile);
+      renderTileList();
+      setStatus("Tile imported.");
+    } else if (data.type === "tilepack" && Array.isArray(data.tiles)) {
+      tiles.push(...data.tiles);
+      renderTileList();
+      setStatus("Tile pack imported (" + data.tiles.length + " tile(s)).");
+    } else {
+      setStatus("Unrecognised tile format.");
+    }
+  } catch (e) {
+    setStatus("Import failed: " + e.message);
+  }
+}
+async function importTilePack() {
+  try {
+    const data = await readJsonFile();
+    if (!data) return;
+    if (data.type === "tilepack" && Array.isArray(data.tiles)) {
+      tiles.push(...data.tiles);
+      renderTileList();
+      setStatus("Tile pack imported (" + data.tiles.length + " tile(s)).");
+    } else if (data.type === "tile" && data.tile) {
+      tiles.push(data.tile);
+      renderTileList();
+      setStatus("Tile imported.");
+    } else {
+      setStatus("Unrecognised tile pack format.");
+    }
+  } catch (e) {
+    setStatus("Import failed: " + e.message);
+  }
+}
+async function importSpec() {
+  try {
+    const data = await readJsonFile();
+    if (!data) return;
+    const spec = data.spec || (data.type === "tile" ? data.tile : null);
+    if (!spec) {
+      setStatus("No spec data found in file.");
+      return;
+    }
+    await openEditorFromSpec(spec);
+    setStatus("Spec loaded into editor.");
+  } catch (e) {
+    setStatus("Import failed: " + e.message);
+  }
+}
+
 // main.js
 var DEFAULT_PALETTE_COLORS = [
   "#ff0000",
@@ -10316,6 +10605,7 @@ var DEFAULT_PALETTE_COLORS = [
 ];
 setColorChangeCallback(markLivePreviewDirty);
 setLivePreviewCallback(markLivePreviewDirty);
+setOnExportTile(exportTile);
 window.switchTab = switchTab;
 window.selectExportFolder = selectExportFolder;
 window.exportHiResTiles = exportHiResTiles;
@@ -10520,7 +10810,7 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   document.getElementById("teBrowseIcon").addEventListener("click", async () => {
     try {
-      const f = await import_uxp7.storage.localFileSystem.getFileForOpening({
+      const f = await import_uxp8.storage.localFileSystem.getFileForOpening({
         types: ["png", "jpg", "jpeg", "gif", "bmp"]
       });
       if (f) {
@@ -10538,6 +10828,11 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("tileEditor").classList.add("hidden");
     appState.editingIdx = -1;
   });
+  document.getElementById("btnImportTile").addEventListener("click", () => importTile());
+  document.getElementById("btnImportAllTiles").addEventListener("click", () => importTilePack());
+  document.getElementById("btnExportAllTiles").addEventListener("click", () => exportAllTiles());
+  document.getElementById("btnImportSpec").addEventListener("click", () => importSpec());
+  document.getElementById("btnExportSpec").addEventListener("click", () => exportEditorSpec(buildTileFromEditor));
   if (palette.length === 0) {
     DEFAULT_PALETTE_COLORS.forEach(addColor);
   } else {

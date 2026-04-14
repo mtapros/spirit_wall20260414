@@ -20,19 +20,24 @@ let exportFolder = null;
 
 export function switchTab(tabName) {
   const btnB  = document.getElementById("tabBtnBuilder");
+  const btnT  = document.getElementById("tabBtnTiles");
   const btnE  = document.getElementById("tabBtnExport");
   const btnL  = document.getElementById("tabBtnLicense");
   const viewB = document.getElementById("viewBuilder");
+  const viewT = document.getElementById("viewTiles");
   const viewE = document.getElementById("viewExport");
   const viewL = document.getElementById("viewLicense");
 
   // Reset all
-  [btnB, btnE, btnL].forEach(b => { if (b) { b.style.background = "transparent"; b.style.color = "#aaa"; } });
-  [viewB, viewE, viewL].forEach(v => { if (v) v.style.display = "none"; });
+  [btnB, btnT, btnE, btnL].forEach(b => { if (b) { b.style.background = "transparent"; b.style.color = "#aaa"; } });
+  [viewB, viewT, viewE, viewL].forEach(v => { if (v) v.style.display = "none"; });
 
   if (tabName === "Builder") {
     btnB.style.background = "#2680eb"; btnB.style.color = "#fff";
     viewB.style.display = "block";
+  } else if (tabName === "Tiles") {
+    if (btnT) { btnT.style.background = "#2680eb"; btnT.style.color = "#fff"; }
+    if (viewT) viewT.style.display = "block";
   } else if (tabName === "Export") {
     btnE.style.background = "#2680eb"; btnE.style.color = "#fff";
     viewE.style.display = "block";

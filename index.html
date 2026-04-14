@@ -25,6 +25,7 @@
     }
     #topChrome,
     #viewBuilder,
+    #viewTiles,
     #viewExport,
     #viewLicense {
       width: var(--panel-max-width);
@@ -44,6 +45,7 @@
       padding-top: 6px;
     }
     #viewBuilder,
+    #viewTiles,
     #viewExport,
     #viewLicense {
       position: fixed;
@@ -350,7 +352,8 @@
 
   <!-- TAB NAVIGATION -->
   <div class="tab-nav" style="display:flex; justify-content:center; gap: 8px; margin: 12px; border-bottom: 1px solid #555; padding-bottom: 8px;">
-    <button id="tabBtnBuilder" class="tab-btn active" style="background:#2680eb; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="switchTab('Builder')">Build</button>
+    <button id="tabBtnBuilder" class="tab-btn active" style="background:#2680eb; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="switchTab('Builder')">Grid</button>
+    <button id="tabBtnTiles" class="tab-btn" style="background:transparent; color:#aaa; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="switchTab('Tiles')">Tiles</button>
     <button id="tabBtnExport" class="tab-btn" style="background:transparent; color:#aaa; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="switchTab('Export')">Hi-Res Export</button>
     <button id="tabBtnLicense" class="tab-btn" style="background:transparent; color:#aaa; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="switchTab('License')">License</button>
   </div>
@@ -384,7 +387,7 @@
 
   <div class="row">
     <!-- GRID & OUTPUT SETTINGS -->
-    <div class="col" style="flex: 0.96;">
+    <div class="col">
       <div class="panel">
         <h2>Grid Setup</h2>
 
@@ -523,182 +526,204 @@
       </div>
     </div>
 
-    <!-- TILE MANAGEMENT -->
-    <div class="col" style="flex: 1.8;">
-      <div class="panel" style="flex:1;">
-        <div style="display:flex; justify-content:flex-start; align-items:center; gap:10px; margin-bottom:8px;">
-          <h2>Tile Sequence</h2>
-          <button id="btnAddTile" class="btn secondary">+ Add Tile</button>
+
+</div>
+
+</div>
+
+<!-- TILES VIEW -->
+<div id="viewTiles" class="tab-content" style="display:none;">
+<div style="display:flex; flex-direction:column; gap:10px; padding:10px; padding-bottom:30px; width:100%; max-width:100%; box-sizing:border-box;">
+
+  <!-- TILE LIBRARY ACTIONS -->
+  <div class="panel">
+    <h2>Tile Library</h2>
+    <div class="field-row" style="flex-wrap:wrap; gap:8px;">
+      <button id="btnImportTile"     class="btn">&#8679; Import Tile / Pack</button>
+      <button id="btnImportAllTiles" class="btn">&#8679; Import Tile Pack</button>
+      <button id="btnExportAllTiles" class="btn">&#8681; Export All Tiles</button>
+    </div>
+    <p class="hint" style="margin-top:6px;">Import or export individual tiles and tile packs. Exported files include all settings and embedded image assets so they can be used on any machine.</p>
+  </div>
+
+  <!-- TILE SEQUENCE -->
+  <div class="panel">
+    <div style="display:flex; justify-content:flex-start; align-items:center; gap:10px; margin-bottom:8px;">
+      <h2>Tile Sequence</h2>
+      <button id="btnAddTile" class="btn secondary">+ Add Tile</button>
+    </div>
+    <p class="hint" style="margin-bottom:8px;">Tiles will be drawn in order, repeating continuously.</p>
+
+    <div id="tileList"></div>
+
+    <div id="tileEditor" class="hidden">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 id="tileEditorTitle" style="margin:0; font-size:13px; color:#fff;">Edit Tile</h3>
+      </div>
+
+      <!-- Spec import / export -->
+      <div class="field-row" style="gap:6px; margin-bottom:10px; border-bottom:1px solid #444; padding-bottom:10px;">
+        <button id="btnImportSpec" class="btn" title="Load a tile spec JSON into this editor">&#8679; Import Spec</button>
+        <button id="btnExportSpec" class="btn" title="Save the current editor settings as a lightweight spec JSON">&#8681; Export Spec</button>
+      </div>
+
+      <div class="live-preview-box">
+         <canvas id="tePreviewCanvas" width="400" height="150"></canvas>
+         <div id="tePreviewText"></div>
+      </div>
+      <button id="tePreviewBtn" class="preview-btn preview-btn-initial">Render Preview</button>
+
+      <div class="field-row">
+        <label>Type:
+          <select id="teType">
+            <option value="phrase-single">Text - Single Line Center</option>
+            <option value="phrase-multiline">Text - Auto Multi-line Break</option>
+            <option value="phrase-fill">Text - Repeat Fill</option>
+            <option value="phrase-fillcolor">Text - Repeat Fill (Alt Colors)</option>
+            <option value="phrase-altwords">Text - Alt Words &amp; Colors</option>
+            <option value="icon">Image/Icon - Center</option>
+            <option value="icon-grid">Image/Icon - Grid Pattern</option>
+            <option value="solid">Solid Color</option>
+            <option value="solid-framed">Framed Solid Color</option>
+            <option value="checkerboard">Checkerboard</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="teTextOpts" class="hidden" style="margin-top:10px; border-top:1px solid #444; padding-top:10px;">
+        <div class="field-row">
+          <label>Text 1: <input type="text" id="teText" value="TEXT"></label>
         </div>
-        <p class="hint" style="margin-bottom:8px;">Tiles will be drawn in order, repeating continuously.</p>
-        
-        <div id="tileList"></div>
-
-        <div id="tileEditor" class="hidden">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <h3 id="tileEditorTitle" style="margin:0; font-size:13px; color:#fff;">Edit Tile</h3>
+        <div class="field-row" style="margin-top:6px;">
+          <label>Font: <input type="text" id="teFont" value="Arial Black"></label>
+          <label>Scale %: <input type="number" id="teTextScale" value="80"></label>
+        </div>
+        <div class="field-row" style="margin-top:8px;">
+          <div class="col">
+            <label>Text Color 1:</label>
+            <div id="cfTextColor" class="cf-container"></div>
           </div>
-
-          <div class="live-preview-box">
-             <canvas id="tePreviewCanvas" width="400" height="150"></canvas>
-             <div id="tePreviewText"></div>
-          </div>
-          <button id="tePreviewBtn" class="preview-btn preview-btn-initial">Render Preview</button>
-
-          <div class="field-row">
-            <label>Type: 
-              <select id="teType">
-                <option value="phrase-single">Text - Single Line Center</option>
-                <option value="phrase-multiline">Text - Auto Multi-line Break</option>
-                <option value="phrase-fill">Text - Repeat Fill</option>
-                <option value="phrase-fillcolor">Text - Repeat Fill (Alt Colors)</option>
-                <option value="phrase-altwords">Text - Alt Words & Colors</option>
-                <option value="icon">Image/Icon - Center</option>
-                <option value="icon-grid">Image/Icon - Grid Pattern</option>
-                <option value="solid">Solid Color</option>
-                <option value="solid-framed">Framed Solid Color</option>
-                <option value="checkerboard">Checkerboard</option>
-              </select>
-            </label>
-          </div>
-
-          <div id="teTextOpts" class="hidden" style="margin-top:10px; border-top:1px solid #444; padding-top:10px;">
-            <div class="field-row">
-              <label>Text 1: <input type="text" id="teText" value="TEXT"></label>
-            </div>
-            <div class="field-row" style="margin-top:6px;">
-              <label>Font: <input type="text" id="teFont" value="Arial Black"></label>
-              <label>Scale %: <input type="number" id="teTextScale" value="80"></label>
-            </div>
-            <div class="field-row" style="margin-top:8px;">
-              <div class="col">
-                <label>Text Color 1:</label>
-                <div id="cfTextColor" class="cf-container"></div>
-              </div>
-              <div class="col">
-                <label>Background 1:</label>
-                <div id="cfBgColor" class="cf-container"></div>
-              </div>
-            </div>
-          </div>
-
-          <div id="teAltWordOpts" class="hidden" style="margin-top:10px;">
-             <div class="field-row">
-              <label>Text 2: <input type="text" id="teText2" value="TEXT 2"></label>
-            </div>
-          </div>
-
-          <div id="teAltColorOpts" class="hidden" style="margin-top:10px;">
-             <div class="field-row">
-              <div class="col">
-                <label>Text Color 2:</label>
-                <div id="cfAltTextColor" class="cf-container"></div>
-              </div>
-              <div class="col">
-                <label>Background 2:</label>
-                <div id="cfAltBgColor" class="cf-container"></div>
-              </div>
-            </div>
-          </div>
-
-          <div id="teIconOpts" class="hidden" style="margin-top:10px; border-top:1px solid #444; padding-top:10px;">
-            <div class="field-row">
-              <button id="teBrowseIcon" class="btn">Browse PNG/JPG...</button>
-              <span id="teIconName" class="hint">No file chosen</span>
-            </div>
-            <div class="field-row" style="margin-top:8px;">
-              <div class="col">
-                <label>Background:</label>
-                <div id="cfIconBg" class="cf-container"></div>
-              </div>
-              <div class="col">
-                <label>Padding (px): <input type="number" id="teIconPad" value="20"></label>
-              </div>
-            </div>
-          </div>
-
-          <div id="teGridDivOpts" class="hidden" style="margin-top:10px;">
-             <div class="field-row">
-              <label title="Number of divisions (e.g. 2 means 2x2 grid)">Grid Divs: <input type="number" id="teGridDivs" value="2" min="1"></label>
-             </div>
-          </div>
-
-          <div id="teSolidOpts" class="hidden" style="margin-top:10px; border-top:1px solid #444; padding-top:10px;">
-            <div class="field-row">
-              <div class="col">
-                <label>Main Color:</label>
-                <div id="cfSolidColor" class="cf-container"></div>
-              </div>
-            </div>
-          </div>
-
-          <div id="teFrameOpts" class="hidden" style="margin-top:10px;">
-            <div class="field-row">
-              <div class="col">
-                <label>Frame Color:</label>
-                <div id="cfFrameColor" class="cf-container"></div>
-              </div>
-              <div class="col">
-                <label>Thickness %: <input type="number" id="teFrameThick" value="10"></label>
-              </div>
-            </div>
-          </div>
-
-          <div id="teCheckOpts" class="hidden" style="margin-top:10px; border-top:1px solid #444; padding-top:10px;">
-             <div class="field-row">
-              <div class="col">
-                <label>Color A:</label>
-                <div id="cfCheckA" class="cf-container"></div>
-              </div>
-              <div class="col">
-                <label>Color B:</label>
-                <div id="cfCheckB" class="cf-container"></div>
-              </div>
-            </div>
-          </div>
-
-          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:15px; border-top:1px solid #444; padding-top:10px;">
-            <button id="teCancel" class="btn">Cancel</button>
-            <button id="teSave" class="btn primary">Save Tile</button>
+          <div class="col">
+            <label>Background 1:</label>
+            <div id="cfBgColor" class="cf-container"></div>
           </div>
         </div>
+      </div>
+
+      <div id="teAltWordOpts" class="hidden" style="margin-top:10px;">
+         <div class="field-row">
+          <label>Text 2: <input type="text" id="teText2" value="TEXT 2"></label>
+        </div>
+      </div>
+
+      <div id="teAltColorOpts" class="hidden" style="margin-top:10px;">
+         <div class="field-row">
+          <div class="col">
+            <label>Text Color 2:</label>
+            <div id="cfAltTextColor" class="cf-container"></div>
+          </div>
+          <div class="col">
+            <label>Background 2:</label>
+            <div id="cfAltBgColor" class="cf-container"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="teIconOpts" class="hidden" style="margin-top:10px; border-top:1px solid #444; padding-top:10px;">
+        <div class="field-row">
+          <button id="teBrowseIcon" class="btn">Browse PNG/JPG...</button>
+          <span id="teIconName" class="hint">No file chosen</span>
+        </div>
+        <div class="field-row" style="margin-top:8px;">
+          <div class="col">
+            <label>Background:</label>
+            <div id="cfIconBg" class="cf-container"></div>
+          </div>
+          <div class="col">
+            <label>Padding (px): <input type="number" id="teIconPad" value="20"></label>
+          </div>
+        </div>
+      </div>
+
+      <div id="teGridDivOpts" class="hidden" style="margin-top:10px;">
+         <div class="field-row">
+          <label title="Number of divisions (e.g. 2 means 2x2 grid)">Grid Divs: <input type="number" id="teGridDivs" value="2" min="1"></label>
+         </div>
+      </div>
+
+      <div id="teSolidOpts" class="hidden" style="margin-top:10px; border-top:1px solid #444; padding-top:10px;">
+        <div class="field-row">
+          <div class="col">
+            <label>Main Color:</label>
+            <div id="cfSolidColor" class="cf-container"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="teFrameOpts" class="hidden" style="margin-top:10px;">
+        <div class="field-row">
+          <div class="col">
+            <label>Frame Color:</label>
+            <div id="cfFrameColor" class="cf-container"></div>
+          </div>
+          <div class="col">
+            <label>Thickness %: <input type="number" id="teFrameThick" value="10"></label>
+          </div>
+        </div>
+      </div>
+
+      <div id="teCheckOpts" class="hidden" style="margin-top:10px; border-top:1px solid #444; padding-top:10px;">
+         <div class="field-row">
+          <div class="col">
+            <label>Color A:</label>
+            <div id="cfCheckA" class="cf-container"></div>
+          </div>
+          <div class="col">
+            <label>Color B:</label>
+            <div id="cfCheckB" class="cf-container"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:15px; border-top:1px solid #444; padding-top:10px;">
+        <button id="teCancel" class="btn">Cancel</button>
+        <button id="teSave" class="btn primary">Save Tile</button>
       </div>
     </div>
   </div>
 
 </div>
+</div>
 
-  <!-- Color Picker Modal -->
-  <div id="pickerPopup" class="hidden">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-      <h3 style="margin:0; font-size:12px; color:#fff;">Pick Color</h3>
+<!-- Color Picker Modal (outside all views so it is visible on any tab) -->
+<div id="pickerPopup" class="hidden">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+    <h3 style="margin:0; font-size:12px; color:#fff;">Pick Color</h3>
+  </div>
+  <!-- HONEYCOMB QUICK-SELECT -->
+  <p class="hint" style="text-align:center; margin:0 0 4px 0;">Click a hex cell for a quick base color</p>
+  <div id="honeycombContainer">
+    <canvas id="honeycombCanvas"></canvas>
+  </div>
+  <!-- FINE-TUNE SQUARE -->
+  <p class="hint" style="text-align:center; margin:0;">Fine-tune: drag to adjust hue, tint and shade</p>
+  <div id="pickerSquareContainer">
+    <canvas id="pickerSquare"></canvas>
+    <div id="pickerMarker"></div>
+  </div>
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div id="pickerPreview" style="width:24px; height:24px; border:1px solid #000; border-radius:3px;"></div>
+      <span id="pickerHexLabel" style="font-family:monospace; font-size:12px;">#000000</span>
     </div>
-    <!-- HONEYCOMB QUICK-SELECT -->
-    <p class="hint" style="text-align:center; margin:0 0 4px 0;">Click a hex cell for a quick base color</p>
-    <div id="honeycombContainer">
-      <canvas id="honeycombCanvas"></canvas>
-    </div>
-    <!-- FINE-TUNE SQUARE -->
-    <p class="hint" style="text-align:center; margin:0;">Fine-tune: drag to adjust hue, tint and shade</p>
-    <div id="pickerSquareContainer">
-      <canvas id="pickerSquare"></canvas>
-      <div id="pickerMarker"></div>
-    </div>
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <div style="display:flex; align-items:center; gap:8px;">
-        <div id="pickerPreview" style="width:24px; height:24px; border:1px solid #000; border-radius:3px;"></div>
-        <span id="pickerHexLabel" style="font-family:monospace; font-size:12px;">#000000</span>
-      </div>
-      <div style="display:flex; gap:6px;">
-        <button id="pickerClose" class="btn">Cancel</button>
-        <button id="pickerAdd" class="btn primary">Use Color</button>
-      </div>
+    <div style="display:flex; gap:6px;">
+      <button id="pickerClose" class="btn">Cancel</button>
+      <button id="pickerAdd" class="btn primary">Use Color</button>
     </div>
   </div>
-
-  <script src="dist.js"></script>
-
 </div>
+
+<script src="dist.js"></script>
 
 <!-- EXPORT VIEW -->
 <div id="viewExport" class="tab-content" style="display:none; padding: 12px;">

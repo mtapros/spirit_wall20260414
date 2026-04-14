@@ -8,6 +8,10 @@ import {
 import { resetLivePreviewState }              from './live-preview.js';
 import { getLicenseState, getAllowedTileTypes } from './licensing.js';
 
+// Callback wired from main.js to avoid tile-editor ↔ tile-io circular dep.
+let _onExportTile = (_idx) => {};
+export function setOnExportTile(fn) { _onExportTile = fn; }
+
 const localFS = storage.localFileSystem;
 
 export function tileLabel(t) {
@@ -69,9 +73,16 @@ export function renderTileList() {
     delBtn.textContent = "X";
     delBtn.addEventListener("click", e => { e.stopPropagation(); tiles.splice(i, 1); renderTileList(); });
 
+    const exportBtn = document.createElement("button");
+    exportBtn.className   = "pill-btn";
+    exportBtn.title       = "Export tile (with all assets)";
+    exportBtn.textContent = "⬇";
+    exportBtn.addEventListener("click", e => { e.stopPropagation(); _onExportTile(i); });
+
     const actions = document.createElement("span");
     actions.className = "pill-actions";
     actions.appendChild(editBtn);
+    actions.appendChild(exportBtn);
     actions.appendChild(delBtn);
 
     pill.appendChild(preview);
@@ -133,6 +144,16 @@ export async function cacheIconImage(file) {
   } catch (e) { appState.cachedIconImage = null; }
 }
 
+export function loadCachedIconFromDataUri(dataUri) {
+  if (!dataUri) { appState.cachedIconImage = null; return Promise.resolve(); }
+  return new Promise(resolve => {
+    const img    = new Image();
+    img.onload   = () => { appState.cachedIconImage = img; resolve(); };
+    img.onerror  = () => { appState.cachedIconImage = null; resolve(); };
+    img.src      = dataUri;
+  });
+}
+
 export async function openEditor(idx) {
   appState.editingIdx = idx;
   document.getElementById("tileEditor").classList.remove("hidden");
@@ -164,7 +185,13 @@ export async function openEditor(idx) {
       if (t.type === "icon-grid") document.getElementById("teGridDivs").value = t.gridDivs || 2;
       document.getElementById("teIconName").textContent = t.iconName || "No file";
       appState.iconFile = t.iconFile || null;
-      await cacheIconImage(appState.iconFile);
+      if (t.iconFile) {
+        await cacheIconImage(t.iconFile);
+      } else if (t.iconDataUri) {
+        await loadCachedIconFromDataUri(t.iconDataUri);
+      } else {
+        appState.cachedIconImage = null;
+      }
     } else if (t.type.startsWith("solid")) {
       setColorFieldValue("teSolidColor", t.solidColor || "#000000");
       if (t.type === "solid-framed") {
@@ -240,4 +267,103 @@ export async function saveTileFromEditor() {
   document.getElementById("tileEditor").classList.add("hidden");
   appState.editingIdx = -1;
   renderTileList();
+}
+
+// =========================================================
+//  BUILD TILE FROM EDITOR (without saving)
+//  Returns the current editor state as a plain tile object.
+// =========================================================
+
+export function buildTileFromEditor() {
+  const type = getStr("teType");
+  if (!type) return null;
+  const tile = { type };
+
+  switch (type) {
+    case "phrase-single": case "phrase-fill": case "phrase-multiline":
+      tile.text      = getStr("teText");  tile.font      = getStr("teFont");
+      tile.textScale = getVal("teTextScale");
+      tile.textColor = getColorFieldValue("teTextColor"); tile.bgColor = getColorFieldValue("teBgColor"); break;
+    case "phrase-fillcolor":
+      tile.text      = getStr("teText");  tile.font      = getStr("teFont");
+      tile.textScale = getVal("teTextScale");
+      tile.textColor = getColorFieldValue("teTextColor"); tile.bgColor = getColorFieldValue("teBgColor");
+      tile.altTextColor = getColorFieldValue("teAltTextColor"); tile.altBgColor = getColorFieldValue("teAltBgColor"); break;
+    case "phrase-altwords":
+      tile.text      = getStr("teText");  tile.text2     = getStr("teText2"); tile.font = getStr("teFont");
+      tile.textScale = getVal("teTextScale");
+      tile.textColor = getColorFieldValue("teTextColor"); tile.bgColor = getColorFieldValue("teBgColor");
+      tile.altTextColor = getColorFieldValue("teAltTextColor"); tile.altBgColor = getColorFieldValue("teAltBgColor"); break;
+    case "icon": case "icon-grid":
+      tile.iconFile = appState.iconFile;
+      tile.iconName = document.getElementById("teIconName").textContent;
+      tile.iconBg   = getColorFieldValue("teIconBg"); tile.iconPad = getVal("teIconPad");
+      if (type === "icon-grid") tile.gridDivs = getVal("teGridDivs"); break;
+    case "solid":
+      tile.solidColor = getColorFieldValue("teSolidColor"); break;
+    case "solid-framed":
+      tile.solidColor     = getColorFieldValue("teSolidColor");
+      tile.frameColor     = getColorFieldValue("teFrameColor");
+      tile.frameThickness = getVal("teFrameThick"); break;
+    case "checkerboard":
+      tile.checkA   = getColorFieldValue("teCheckA"); tile.checkB = getColorFieldValue("teCheckB");
+      tile.gridDivs = getVal("teGridDivs"); break;
+  }
+
+  return tile;
+}
+
+// =========================================================
+//  OPEN EDITOR FROM SPEC
+//  Populates the editor with the given tile-like spec object
+//  and opens it as a new tile (not yet in tiles[]).
+// =========================================================
+
+export async function openEditorFromSpec(spec) {
+  if (!spec || !spec.type) return;
+  appState.editingIdx = -1;
+  document.getElementById("tileEditor").classList.remove("hidden");
+  refreshAllColorFields();
+  document.getElementById("tileEditorTitle").textContent = "New Tile (from spec)";
+
+  document.getElementById("teType").value = spec.type;
+  showEditorSection(spec.type);
+
+  if (spec.type.startsWith("phrase")) {
+    document.getElementById("teText").value       = spec.text       || "TEXT";
+    document.getElementById("teFont").value       = spec.font       || "Arial Black";
+    document.getElementById("teTextScale").value  = spec.textScale  || 80;
+    setColorFieldValue("teTextColor", spec.textColor || "#000000");
+    setColorFieldValue("teBgColor",   spec.bgColor   || "#ffffff");
+    if (spec.type === "phrase-altwords")
+      document.getElementById("teText2").value = spec.text2 || "TEXT 2";
+    if (spec.type === "phrase-fillcolor" || spec.type === "phrase-altwords") {
+      setColorFieldValue("teAltTextColor", spec.altTextColor || "#ffffff");
+      setColorFieldValue("teAltBgColor",   spec.altBgColor   || "#000000");
+    }
+  } else if (spec.type.startsWith("icon")) {
+    setColorFieldValue("teIconBg", spec.iconBg || "#ffffff");
+    document.getElementById("teIconPad").value = spec.iconPad || 20;
+    if (spec.type === "icon-grid") document.getElementById("teGridDivs").value = spec.gridDivs || 2;
+    document.getElementById("teIconName").textContent = spec.iconName || "No file";
+    appState.iconFile = null;
+    if (spec.iconDataUri) {
+      await loadCachedIconFromDataUri(spec.iconDataUri);
+    } else {
+      appState.cachedIconImage = null;
+    }
+  } else if (spec.type.startsWith("solid")) {
+    setColorFieldValue("teSolidColor", spec.solidColor || "#000000");
+    if (spec.type === "solid-framed") {
+      setColorFieldValue("teFrameColor", spec.frameColor || "#000000");
+      document.getElementById("teFrameThick").value = spec.frameThickness || 10;
+    }
+  } else if (spec.type === "checkerboard") {
+    setColorFieldValue("teCheckA", spec.checkA || "#ffffff");
+    setColorFieldValue("teCheckB", spec.checkB || "#000000");
+    document.getElementById("teGridDivs").value = spec.gridDivs || 4;
+  }
+
+  document.getElementById("tileEditor").scrollIntoView({ behavior: "smooth", block: "start" });
+  resetLivePreviewState();
 }

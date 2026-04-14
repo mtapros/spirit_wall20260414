@@ -38,6 +38,8 @@ import {
 import {
   renderTileList, showEditorSection, openEditor,
   saveTileFromEditor, cacheIconImage,
+  openEditorFromSpec, buildTileFromEditor,
+  setOnExportTile,
 } from './modules/tile-editor.js';
 
 import { generate }              from './modules/generation.js';
@@ -45,6 +47,12 @@ import { apply3DWall }           from './modules/wall-3d.js';
 import {
   switchTab, selectExportFolder, exportHiResTiles,
 } from './modules/export.js';
+
+import {
+  exportTile, exportAllTiles,
+  importTile, importTilePack,
+  importSpec, exportEditorSpec,
+} from './modules/tile-io.js';
 
 import {
   loadLicenseData,
@@ -72,6 +80,9 @@ const DEFAULT_PALETTE_COLORS = [
 // =========================================================
 setColorChangeCallback(markLivePreviewDirty);
 setLivePreviewCallback(markLivePreviewDirty);
+
+// Wire per-tile export callback (breaks tile-editor ↔ tile-io circular dep)
+setOnExportTile(exportTile);
 
 // Expose tab / export functions called by inline HTML attributes
 window.switchTab          = switchTab;
@@ -366,6 +377,15 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("tileEditor").classList.add("hidden");
     appState.editingIdx = -1;
   });
+
+  // ---- Tiles tab — library import/export ----
+  document.getElementById("btnImportTile").addEventListener("click",    () => importTile());
+  document.getElementById("btnImportAllTiles").addEventListener("click", () => importTilePack());
+  document.getElementById("btnExportAllTiles").addEventListener("click", () => exportAllTiles());
+
+  // ---- Tiles tab — editor spec import/export ----
+  document.getElementById("btnImportSpec").addEventListener("click",  () => importSpec());
+  document.getElementById("btnExportSpec").addEventListener("click",  () => exportEditorSpec(buildTileFromEditor));
 
   if (palette.length === 0) {
     DEFAULT_PALETTE_COLORS.forEach(addColor);
