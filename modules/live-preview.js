@@ -75,164 +75,92 @@ export function scheduleLivePreview() {
 }
 
 // =========================================================
-//  CANVAS-ONLY PHRASE RENDERER  (used for thumbnail capture)
-//  Replicates the phrase layout logic but draws to canvas
-//  instead of creating DOM overlay elements.
+//  SVG HELPER  (for phrase-tile thumbnails)
+//  UXP's canvas 2D context does not support fillText on
+//  off-screen canvases, so we build an SVG data URI instead.
 // =========================================================
 
-function renderPhraseToCanvas(ctx, w, h, type, text1, text2, font, scale, tColor, bColor, altTColor, altBColor) {
-  // background
-  ctx.fillStyle = bColor;
-  ctx.fillRect(0, 0, w, h);
+function _esc(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
-  ctx.textBaseline = "middle";
+function buildPhraseSvgDataUri(w, h, type) {
+  const text1     = (getStr("teText")  || "TEXT").toUpperCase();
+  const text2     = (getStr("teText2") || "TEXT 2").toUpperCase();
+  const font      = getStr("teFont") || "Arial";
+  const scale     = (getVal("teTextScale") || 80) / 100;
+  const tColor    = getColorFieldValue("teTextColor")    || "#ffffff";
+  const bColor    = getColorFieldValue("teBgColor")      || "#000000";
+  const altTColor = (type === "phrase-fillcolor" || type === "phrase-altwords")
+    ? (getColorFieldValue("teAltTextColor") || tColor) : tColor;
+  const altBColor = (type === "phrase-fillcolor" || type === "phrase-altwords")
+    ? getColorFieldValue("teAltBgColor") : null;
+
+  let body = `<rect width="${w}" height="${h}" fill="${_esc(bColor)}"/>`;
 
   if (type === "phrase-single") {
     const fs = Math.floor(Math.min((w * scale) / ((text1.length || 1) * 0.6), h * scale));
-    ctx.font = `bold ${fs}px '${font}', sans-serif`;
-    ctx.fillStyle = tColor;
-    ctx.textAlign = "center";
-    ctx.fillText(text1, w / 2, h / 2);
+    body += `<text x="${w/2}" y="${h/2}" text-anchor="middle" dominant-baseline="middle"` +
+            ` font-family="${_esc(font)},sans-serif" font-weight="bold"` +
+            ` font-size="${fs}" fill="${_esc(tColor)}">${_esc(text1)}</text>`;
 
   } else if (type === "phrase-fill" || type === "phrase-fillcolor" || type === "phrase-altwords") {
-    const longestStr = (type === "phrase-altwords" && text2.length > text1.length) ? text2 : text1;
-    const fs2        = Math.floor((w * scale) / ((longestStr.length || 1) * 0.6));
-    const numLines   = Math.max(1, Math.floor(h / (fs2 * 1.25)));
-    const evenH      = h / numLines;
-
-    ctx.font = `bold ${fs2}px '${font}', sans-serif`;
-    ctx.textAlign = "center";
+    const longest  = (type === "phrase-altwords" && text2.length > text1.length) ? text2 : text1;
+    const fs2      = Math.floor((w * scale) / ((longest.length || 1) * 0.6));
+    const numLines = Math.max(1, Math.floor(h / (fs2 * 1.25)));
+    const evenH    = h / numLines;
     for (let i = 0; i < numLines; i++) {
-      const isAlt = (i % 2 === 1);
+      const isAlt    = (i % 2 === 1);
+      const lineText = (type === "phrase-altwords" && isAlt) ? text2 : text1;
+      const lineCol  = isAlt ? altTColor : tColor;
       if (isAlt && altBColor) {
-        ctx.fillStyle = altBColor;
-        ctx.fillRect(0, i * evenH, w, evenH);
+        body += `<rect x="0" y="${i * evenH}" width="${w}" height="${evenH}" fill="${_esc(altBColor)}"/>`;
       }
-      ctx.fillStyle = isAlt ? (altTColor || tColor) : tColor;
-      ctx.fillText(
-        (type === "phrase-altwords" && isAlt) ? text2 : text1,
-        w / 2,
-        i * evenH + evenH / 2
-      );
+      body += `<text x="${w/2}" y="${i * evenH + evenH / 2}" text-anchor="middle" dominant-baseline="middle"` +
+              ` font-family="${_esc(font)},sans-serif" font-weight="bold"` +
+              ` font-size="${fs2}" fill="${_esc(lineCol)}">${_esc(lineText)}</text>`;
     }
 
   } else if (type === "phrase-multiline") {
-    const words       = text1.split(/\s+/);
-    const longestWord = words.reduce((a, b) => a.length > b.length ? a : b, "");
-    const maxCharW    = w * scale, maxH2 = h * scale;
-    let maxFsWord     = Math.floor(maxCharW / ((longestWord.length || 1) * 0.6));
-    let fsArea        = Math.floor(Math.sqrt((maxCharW * maxH2) / ((text1.length || 1) * 0.72)));
-    let fs3           = Math.min(maxFsWord, fsArea, Math.floor(maxH2));
+    const fs3 = Math.floor(Math.min((w * scale) / ((text1.length || 1) * 0.6), h * 0.3 * scale));
+    body += `<text x="${w/2}" y="${h/2}" text-anchor="middle" dominant-baseline="middle"` +
+            ` font-family="${_esc(font)},sans-serif" font-weight="bold"` +
+            ` font-size="${fs3}" fill="${_esc(tColor)}">${_esc(text1)}</text>`;
+  }
 
-    let lh, blockH, linesToDraw = [];
-    while (fs3 > 4) {
-      lh = fs3 * 1.2;
-      const charsPerLine = Math.max(1, Math.floor(maxCharW / (fs3 * 0.6)));
-      linesToDraw = [];
-      let currentLine = [], currLen = 0;
-      for (let wi = 0; wi < words.length; wi++) {
-        const wd = words[wi];
-        if (currLen === 0) { currentLine.push(wd); currLen = wd.length; }
-        else if (currLen + 1 + wd.length > charsPerLine) {
-          linesToDraw.push(currentLine.join(" ")); currentLine = [wd]; currLen = wd.length;
-        } else { currentLine.push(wd); currLen += 1 + wd.length; }
-      }
-      if (currentLine.length > 0) linesToDraw.push(currentLine.join(" "));
-      blockH = linesToDraw.length * lh;
-      if (blockH <= maxH2) break;
-      fs3--;
-    }
-
-    ctx.font = `bold ${fs3}px '${font}', sans-serif`;
-    ctx.fillStyle = tColor;
-    ctx.textAlign = "center";
-    const startY = (h - linesToDraw.length * (fs3 * 1.2)) / 2 + fs3 * 0.6;
-    for (let li = 0; li < linesToDraw.length; li++) {
-      ctx.fillText(linesToDraw[li], w / 2, startY + li * (fs3 * 1.2));
-    }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${body}</svg>`;
+  try {
+    return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+  } catch (_) {
+    return null;
   }
 }
 
 // =========================================================
 //  CAPTURE PREVIEW → DATA URI
-//  Renders the entire preview onto a fresh off-screen canvas
-//  (text included) and returns a PNG data URI for thumbnails.
+//  For phrase types: generates an SVG data URI (avoids
+//  ctx.fillText which is unavailable in UXP off-screen canvas).
+//  For all other types: returns toDataURL of the live canvas
+//  which already has the correct render from updateLivePreview.
 // =========================================================
 
 export function capturePreviewToDataUri() {
   const liveCanvas = document.getElementById("tePreviewCanvas");
   if (!liveCanvas) return null;
 
-  const w = liveCanvas.width  || 200;
-  const h = liveCanvas.height || 200;
-
-  const offscreen = document.createElement("canvas");
-  offscreen.width  = w;
-  offscreen.height = h;
-  const ctx = offscreen.getContext("2d");
-  if (!ctx) return null;
-
-  const { tileW } = getTileEditorDims();
   const type = getStr("teType");
 
-  const fillRect = (color, rx, ry, rw, rh) => { ctx.fillStyle = color; ctx.fillRect(rx, ry, rw, rh); };
-
-  if (type === "solid") {
-    fillRect(getColorFieldValue("teSolidColor"), 0, 0, w, h);
-
-  } else if (type === "solid-framed") {
-    fillRect(getColorFieldValue("teFrameColor"), 0, 0, w, h);
-    const thickPct = (getVal("teFrameThick") || 10) / 100;
-    const tx = w * thickPct, ty = h * thickPct;
-    fillRect(getColorFieldValue("teSolidColor"), tx, ty, w - tx*2, h - ty*2);
-
-  } else if (type === "checkerboard") {
-    const cA = getColorFieldValue("teCheckA"), cB = getColorFieldValue("teCheckB");
-    fillRect(cA, 0, 0, w, h);
-    const divs = getVal("teGridDivs") || 4;
-    const cellW = w / divs, cellH = h / divs;
-    for (let r = 0; r < divs; r++) {
-      for (let c = 0; c < divs; c++) {
-        if ((r + c) % 2 === 1) {
-          fillRect(cB, Math.round(c * cellW), Math.round(r * cellH),
-            Math.round((c+1)*cellW) - Math.round(c*cellW),
-            Math.round((r+1)*cellH) - Math.round(r*cellH));
-        }
-      }
-    }
-
-  } else if (type.startsWith("icon")) {
-    fillRect(getColorFieldValue("teIconBg"), 0, 0, w, h);
-    if (appState.cachedIconImage) {
-      const isGrid = type === "icon-grid";
-      const divs2  = isGrid ? (getVal("teGridDivs") || 2) : 1;
-      const cellW2 = w / divs2, cellH2 = h / divs2;
-      const pad    = (getVal("teIconPad") || 0) * (w / (tileW || 400));
-      const fitW   = Math.max(1, cellW2 - pad*2), fitH = Math.max(1, cellH2 - pad*2);
-      const scale  = Math.min(fitW / appState.cachedIconImage.width, fitH / appState.cachedIconImage.height);
-      const dw = appState.cachedIconImage.width * scale, dh = appState.cachedIconImage.height * scale;
-      for (let r = 0; r < divs2; r++) {
-        for (let c = 0; c < divs2; c++) {
-          ctx.drawImage(appState.cachedIconImage, c*cellW2+(cellW2-dw)/2, r*cellH2+(cellH2-dh)/2, dw, dh);
-        }
-      }
-    }
-
-  } else if (type.startsWith("phrase")) {
-    const text1     = getStr("teText").toUpperCase()  || "TEXT";
-    const text2     = getStr("teText2").toUpperCase() || "TEXT 2";
-    const font      = getStr("teFont") || "Arial";
-    const scale     = (getVal("teTextScale") || 80) / 100;
-    const tColor    = getColorFieldValue("teTextColor");
-    const bColor    = getColorFieldValue("teBgColor");
-    const altTColor = (type === "phrase-fillcolor" || type === "phrase-altwords")
-      ? getColorFieldValue("teAltTextColor") : tColor;
-    const altBColor = (type === "phrase-fillcolor" || type === "phrase-altwords")
-      ? getColorFieldValue("teAltBgColor") : null;
-    renderPhraseToCanvas(ctx, w, h, type, text1, text2, font, scale, tColor, bColor, altTColor, altBColor);
+  if (type && type.startsWith("phrase")) {
+    const w = liveCanvas.width  || 200;
+    const h = liveCanvas.height || 200;
+    return buildPhraseSvgDataUri(w, h, type);
   }
 
-  try { return offscreen.toDataURL("image/png"); } catch (_) { return null; }
+  try { return liveCanvas.toDataURL("image/png"); } catch (_) { return null; }
 }
 
 
@@ -241,18 +169,25 @@ export function updateLivePreview() {
   const overlay = document.getElementById("tePreviewText");
   if (!canvas || !overlay) return;
 
-  const parent   = canvas.parentElement;
-  if (!parent) return;
-  let displayW   = parent.clientWidth;
-  if (displayW <= 0) displayW = 250;
+  const parent = canvas.parentElement;
 
   const { tileW, tileH } = getTileEditorDims();
-  const aspect   = tileH / tileW;
-  let displayH   = Math.round(displayW * aspect);
-  if (displayH <= 0) displayH = displayW;
+  const aspect = tileH / tileW;
+
+  // Fixed 300px on the long edge so the preview stays compact
+  const PREVIEW_LONG = 300;
+  let displayW, displayH;
+  if (tileW >= tileH) {
+    displayW = PREVIEW_LONG;
+    displayH = Math.max(1, Math.round(PREVIEW_LONG * aspect));
+  } else {
+    displayH = PREVIEW_LONG;
+    displayW = Math.max(1, Math.round(PREVIEW_LONG / aspect));
+  }
 
   const sizeKey = `${displayW}x${displayH}`;
   if (canvas.dataset.previewSize !== sizeKey) {
+    parent.style.width     = displayW + "px";
     parent.style.height    = displayH + "px";
     parent.style.position  = "relative";
     parent.style.overflow  = "hidden";
@@ -261,8 +196,8 @@ export function updateLivePreview() {
     canvas.style.position          = "absolute";
     canvas.style.top               = "0";
     canvas.style.left              = "0";
-    canvas.style.width             = "100%";
-    canvas.style.height            = "100%";
+    canvas.style.width             = displayW + "px";
+    canvas.style.height            = displayH + "px";
     canvas.style.pointerEvents     = "none";
     canvas.style.backfaceVisibility = "hidden";
     canvas.style.transform         = "translateZ(0)";

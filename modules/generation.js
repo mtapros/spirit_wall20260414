@@ -161,8 +161,9 @@ export async function generateVirtual() {
   const gX        = getVal("gapX");
   const gY        = getVal("gapY");
   const { tileW, tileH } = getTileDims();
-  const stagger   = document.getElementById("stagger").checked;
-  const sPct      = getVal("staggerOffset") / 100;
+  const stagger      = document.getElementById("stagger").checked;
+  const sPct         = getVal("staggerOffset") / 100;
+  const randomizeTiles = !!(document.getElementById("randomizeTiles") && document.getElementById("randomizeTiles").checked);
   const genRefl   = document.getElementById("genReflGrid") &&
                     document.getElementById("genReflGrid").checked;
   const { bW, bH } = computeCanvasSize();
@@ -293,23 +294,41 @@ export async function generateVirtual() {
     // Render tile grid
     const TILE_WIDTH_EPSILON = 0.01;
     const stepX = tileW + gX;
-    let ti = 0, prevRowPapers = [];
+    let ti = 0, prevRowPapers = [], prevRowTileIndices = [];
     for (let r = 0; r < rows; r++) {
       let isOffsetRow = stagger && r % 2 !== 0;
       let rawOffset   = isOffsetRow ? stepX * sPct : 0;
       let rowOffset   = ((rawOffset % stepX) + stepX) % stepX;
       let xPos        = (isOffsetRow && rowOffset !== 0) ? (rowOffset - stepX) : rowOffset;
-      let currentRowPapers = [], cIndex = 0;
+      let currentRowPapers = [], currentRowTileIndices = [], cIndex = 0, lastTileIdx = -1;
 
       while (xPos < bW) {
         let yPos = r * (tileH + gY);
         let drawLeft  = Math.max(0, xPos);
         let drawRight = Math.min(bW, xPos + tileW);
         let drawW     = Math.max(0, drawRight - drawLeft);
+
+        // --- Tile selection: sequential or randomized with adjacency avoidance ---
+        let chosenTileIdx;
+        if (randomizeTiles && tiles.length > 1) {
+          const exclude = new Set();
+          if (lastTileIdx >= 0) exclude.add(lastTileIdx);
+          const aboveIdx = prevRowTileIndices[cIndex];
+          if (aboveIdx !== undefined && aboveIdx >= 0) exclude.add(aboveIdx);
+          let candidates = [];
+          for (let k = 0; k < tiles.length; k++) { if (!exclude.has(k)) candidates.push(k); }
+          if (candidates.length === 0) candidates = Array.from({ length: tiles.length }, (_, k) => k);
+          chosenTileIdx = candidates[Math.floor(Math.random() * candidates.length)];
+        } else {
+          chosenTileIdx = ti % tiles.length;
+        }
+        currentRowTileIndices.push(chosenTileIdx);
+        lastTileIdx = chosenTileIdx;
+
         if (drawW > 0) {
           const shouldTrimOffsetEdgeTile = isOffsetRow && Math.abs(drawW - tileW) > TILE_WIDTH_EPSILON;
           const layerIdsBefore = shouldTrimOffsetEdgeTile ? getTopLevelLayerIds(baseDoc) : null;
-          await renderTile(ti, xPos, yPos, tileW, tileH, targetDocId);
+          await renderTile(chosenTileIdx, xPos, yPos, tileW, tileH, targetDocId);
           if (shouldTrimOffsetEdgeTile && layerIdsBefore) {
             const newLayerIds = [];
             for (let li = 0; li < baseDoc.layers.length; li++) {
@@ -342,6 +361,7 @@ export async function generateVirtual() {
         xPos += stepX;
       }
       prevRowPapers = currentRowPapers;
+      prevRowTileIndices = currentRowTileIndices;
     }
 
     // Remove hidden master paper layers
