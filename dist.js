@@ -10061,7 +10061,7 @@ async function transformTruePerspective(layerId, side, fov, wallAngle) {
   }], { synchronousExecution: true });
 }
 async function apply3DWall() {
-  if (!await isFeatureAllowed("Apply 3D Perspective", void 0, "pro")) return;
+  if (!await isFeatureAllowed("Apply 3D Perspective")) return;
   const doc = import_photoshop7.app.activeDocument;
   if (!doc) return;
   const rawCamHeight = getVal("camHeight") || 50;
