@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --bg: #2b2b2b; --panel: #323232; --text: #e0e0e0;
+      --border: #444; --accent: #0078d7; --accent-hover: #005a9e;
+      --swatch-sz: 24px; --radius: 4px;
+      --panel-max-width: 880px;
+      --top-chrome-h: 0px;
+    }
+    html,
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 12px; margin: 0; padding: 0; box-sizing: border-box;
+      width: var(--panel-max-width);
+      min-width: var(--panel-max-width);
+      max-width: var(--panel-max-width);
+      overflow-x: hidden; height: 100vh;
+    }
+    body {
+      overflow: hidden;
+    }
+    #topChrome,
+    #viewBuilder,
+    #viewExport,
+    #viewLicense {
+      width: var(--panel-max-width);
+      min-width: var(--panel-max-width);
+      max-width: var(--panel-max-width);
+      margin-left: auto;
+      margin-right: auto;
+      box-sizing: border-box;
+    }
+    #topChrome {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5000;
+      background: var(--bg);
+      padding-top: 6px;
+    }
+    #viewBuilder,
+    #viewExport,
+    #viewLicense {
+      position: fixed;
+      top: calc(var(--top-chrome-h) + 6px);
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: var(--bg);
+      margin-top: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    #app-wrapper {
+      display: flex; flex-direction: column; gap: 10px; padding: 10px; 
+      min-height: 0; padding-bottom: 30px;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    h2 { font-size: 13px; margin: 0 0 8px 0; border-bottom: 1px solid var(--border); padding-bottom: 4px; color: #fff; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; max-width: 100%; box-sizing: border-box; }
+    .row { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; min-width: 0; }
+    .col { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+    .field-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+    label { display: flex; align-items: center; gap: 4px; white-space: nowrap; min-width: 0; }
+    input[type="number"], input[type="text"], select {
+      background: #1e1e1e; color: #fff; border: 1px solid var(--border);
+      border-radius: 3px; padding: 4px; font-size: 11px;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    input[type="number"] { width: 50px; }
+    input[type="text"] { flex: 1; min-width: 80px; }
+    .btn {
+      background: #444; color: #fff; border: 1px solid #555;
+      padding: 6px 12px; border-radius: var(--radius); cursor: pointer;
+      font-size: 12px; display: inline-flex; align-items: center; justify-content: center;
+      gap: 4px; transition: 0.2s;
+    }
+    .btn:hover { background: #555; }
+    .btn.primary { background: var(--accent); border-color: transparent; font-weight: bold; }
+    .btn.primary:hover { background: var(--accent-hover); }
+    .btn.secondary { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+    .btn.secondary:hover { background: rgba(0,120,215,0.1); }
+    .hidden { display: none !important; }
+    .hint { font-size: 10px; color: #aaa; margin: 0; }
+
+    #trialBanner {
+      background: #222; color: #ddd;
+      font-size: 12px; font-weight: bold; text-align: center;
+      padding: 7px 12px; border-bottom: 2px solid #c0392b;
+      word-break: break-word;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    #trialBanner.state-active {
+      background: #11351f;
+      color: #d9ffe4;
+      border-bottom-color: #24a148;
+    }
+    #trialBanner.state-trial {
+      background: #4a3908;
+      color: #ffe9a6;
+      border-bottom-color: #f1c21b;
+    }
+    #trialBanner.state-inactive {
+      background: #5a1818;
+      color: #ffd4d4;
+      border-bottom-color: #da1e28;
+    }
+    #trialBanner .tier-pill {
+      color: #111;
+      background: #f1c21b;
+      border: 1px solid #d2a106;
+      border-radius: 3px;
+      padding: 1px 6px;
+    }
+    
+    .swatch-grid { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .swatch {
+      width: var(--swatch-sz); height: var(--swatch-sz);
+      border-radius: 3px; border: 1px solid #000; box-shadow: 0 0 0 1px var(--border);
+      cursor: pointer; position: relative;
+    }
+    .swatch:hover::after {
+      content: 'x'; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6); color: white; display: flex;
+      align-items: center; justify-content: center; font-size: 14px; font-weight: bold;
+    }
+    #refContainer { margin-top: 8px; text-align: center; }
+    #refCanvas { max-width: 100%; border: 1px solid var(--border); cursor: crosshair; border-radius: 3px; }
+
+    .cf-container { display: flex; flex-direction: column; gap: 4px; }
+    .cf-swatches { display: flex; flex-wrap: wrap; gap: 2px; }
+    .cf-swatch {
+      width: 16px; height: 16px; border-radius: 2px; border: 1px solid #000; cursor: pointer;
+    }
+    .cf-swatch.selected { box-shadow: 0 0 0 1px #fff; z-index: 1; }
+    .cf-swatch.custom-btn {
+      background: #444; border: 1px dashed #888; display: flex; align-items: center; justify-content: center;
+      font-size: 10px; color: #aaa; line-height: 1;
+    }
+    .cf-current { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+    .cf-current-swatch { width: 24px; height: 24px; border-radius: 3px; border: 1px solid #000; }
+    .cf-current-label { font-family: monospace; font-size: 11px; color: #ccc; }
+
+    #pickerPopup {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: var(--panel); border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+      padding: 12px; border-radius: 6px; z-index: 6000; display: flex; flex-direction: column; gap: 10px;
+      max-height: 90vh; overflow-y: auto;
+    }
+    #honeycombContainer {
+      display: flex; justify-content: center; align-items: center;
+      cursor: pointer;
+    }
+    #honeycombCanvas {
+      display: block;
+    }
+    #pickerSquareContainer { position: relative; width: 220px; height: 220px; cursor: crosshair; border: 1px solid #000; }
+    #pickerSquare { width: 100%; height: 100%; }
+    #pickerMarker {
+      position: absolute; width: 10px; height: 10px; border: 1px solid #fff; border-radius: 50%;
+      box-shadow: 0 0 2px #000; transform: translate(-50%, -50%); pointer-events: none;
+    }
+
+    #tileList { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; max-height: 150px; overflow-y: auto; padding-right: 4px; }
+    .tile-pill {
+      background: #222; border: 1px solid var(--border); border-radius: 4px;
+      padding: 6px; display: flex; align-items: center; gap: 8px; cursor: pointer;
+    }
+    .tile-pill:hover { border-color: #666; }
+    .pill-preview { width: 20px; height: 20px; border-radius: 2px; border: 1px solid #000; flex-shrink: 0; }
+    .pill-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pill-actions { display: flex; gap: 4px; }
+    .pill-btn {
+      background: transparent; border: none; color: #aaa; cursor: pointer; padding: 2px 4px; border-radius: 3px;
+    }
+    .pill-btn:hover { background: #444; color: #fff; }
+    .pill-btn.del:hover { background: #800; }
+
+    #tileEditor {
+      background: #222; border: 1px solid var(--accent); border-radius: var(--radius);
+      padding: 10px; margin-top: 10px; position: relative;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+      box-sizing: border-box;
+    }
+    
+    .live-preview-box {
+      width: min(50%, 420px); max-width: 100%; height: 80px; background: #111; border: 1px dashed #555;
+      margin: 0 auto 10px; border-radius: 4px; position: relative; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #tePreviewCanvas { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+    #tePreviewText { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; display:flex; flex-direction:column; align-items:center; }
+
+    #status {
+      padding: 8px; background: #1e1e1e; border: 1px solid var(--border);
+      border-radius: var(--radius); font-family: monospace; color: #aaa;
+      text-align: center; min-height: 14px;
+      margin: 0 12px 8px;
+    }
+    #status.status-active { color: #8ef0b2; border-color: #1f8f50; }
+    #status.status-trial { color: #ffd666; border-color: #c7a32a; }
+    #status.status-inactive { color: #ff9b9b; border-color: #d95454; }
+
+    .wall-type-toggle {
+      display: flex;
+      width: 100%;
+      gap: 6px;
+    }
+    .wall-type-toggle label {
+      flex: 1 1 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #666;
+      background: #2b2b2b;
+      border-radius: 4px;
+      padding: 0;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      color: #ddd;
+      cursor: pointer;
+      text-transform: uppercase;
+      box-sizing: border-box;
+    }
+    .wall-type-toggle input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .wall-type-toggle label span {
+      width: 100%;
+      display: block;
+      text-align: center;
+      padding: 7px 6px;
+      border-radius: 3px;
+      box-sizing: border-box;
+    }
+    .wall-type-toggle label input[type="radio"]:checked + span {
+      background: #153a68;
+      color: #e8f2ff;
+      box-shadow: inset 0 0 0 1px #2f81f7;
+    }
+
+    .wall-slider-group {
+      margin-bottom: 14px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .wall-slider-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #ddd;
+      text-align: center;
+      width: 100%;
+    }
+    .wall-slider-row {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .wall-slider-minmax {
+      display: inline-block;
+      flex: 0 0 54px;
+      font-size: 9px;
+      color: #b9b9b9;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .wall-slider-row input[type="range"] {
+      flex: 1 1 auto;
+      width: auto;
+      min-width: 80px;
+      height: 18px;
+      -webkit-appearance: auto;
+      appearance: auto;
+      accent-color: #2f81f7;
+      cursor: pointer;
+    }
+    .wall-slider-row .slider-num {
+      flex: 0 0 56px;
+      width: 56px;
+      min-width: 56px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #fff;
+      background: #1e1e1e;
+      border: 1px solid #555;
+      border-radius: 3px;
+      padding: 3px 4px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .preview-btn {
+      width: 100%;
+      margin: 0 auto 10px;
+      padding: 8px 10px;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      color: #fff;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+      cursor: pointer;
+    }
+    .preview-btn-initial {
+      background: #2f81f7;
+      border-color: #1f6ad2;
+    }
+    .preview-btn-dirty {
+      background: #c0392b;
+      border-color: #8d2d22;
+    }
+    .preview-btn-current {
+      background: #1f8f4f;
+      border-color: #166b3b;
+    }
+  </style>
+</head>
+<body>
+
+<!-- TRIAL ENDED BANNER (hidden until trial expires and user is unlicensed) -->
+<div id="topChrome">
+  <div id="trialBanner" class="hidden"></div>
+  <div id="status">Ready.</div>
+
+  <!-- TAB NAVIGATION -->
+  <div class="tab-nav" style="display:flex; justify-content:center; gap: 8px; margin: 12px; border-bottom: 1px solid #555; padding-bottom: 8px;">
+    <button id="tabBtnBuilder" class="tab-btn active" style="background:#2680eb; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="switchTab('Builder')">Build</button>
+    <button id="tabBtnExport" class="tab-btn" style="background:transparent; color:#aaa; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="switchTab('Export')">Hi-Res Export</button>
+    <button id="tabBtnLicense" class="tab-btn" style="background:transparent; color:#aaa; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="switchTab('License')">License</button>
+  </div>
+</div>
+
+<!-- BUILDER VIEW -->
+<div id="viewBuilder" class="tab-content" style="display:block;">
+<div id="app-wrapper">
+
+  <!-- GLOBAL PALETTE -->
+  <div class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2>Global Color Palette</h2>
+      <div style="display:flex; gap:4px;">
+        <button id="btnLoadRef" class="btn" disabled style="opacity:0.4; cursor:not-allowed;" title="Coming in a future update">Sample from Image</button>
+        <span style="font-size:10px; color:var(--color-hint, #888); align-self:center;">future feature</span>
+        <button id="btnOpenPicker" class="btn" title="Open the color picker">Pick Color</button>
+        <button id="btnClearColors" class="btn" title="Remove all colors from palette">Clear All</button>
+      </div>
+    </div>
+    <div id="refContainer" class="hidden">
+      <p class="hint" style="margin-bottom:4px;">Click anywhere on the image below to sample a color into the palette</p>
+      <canvas id="refCanvas"></canvas>
+      <div style="margin-top:4px;">
+        <button id="btnCloseRef" class="btn" style="font-size:10px; padding:3px 8px;">Close Image</button>
+      </div>
+    </div>
+    <div id="swatches" class="swatch-grid"></div>
+    <p class="hint" style="margin-top:4px;">Click a swatch to remove it. These colors appear in all tile color pickers.</p>
+  </div>
+
+  <div class="row">
+    <!-- GRID & OUTPUT SETTINGS -->
+    <div class="col" style="flex: 0.96;">
+      <div class="panel">
+        <h2>Grid Setup</h2>
+
+        <!-- TILE SIZE: Ratio + Long Side -->
+        <div class="field-row">
+          <label>Ratio:
+            <select id="tileRatio" style="width:auto;">
+              <option value="1:1" selected>1:1 (Square)</option>
+              <option value="2:3">2:3</option>
+              <option value="5:7">5:7</option>
+              <option value="4:5">4:5</option>
+              <option value="8.5:11">8.5:11 (Letter)</option>
+              <option value="16:9">16:9 (Wide)</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-row">
+          <label>Orientation:
+            <select id="tileOrientation" style="width:auto;">
+              <option value="landscape">Landscape</option>
+              <option value="portrait">Portrait</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-row">
+          <label>Long Side (px): <input type="number" id="tileLongSide" value="500"></label>
+        </div>
+        <div class="field-row">
+          <span class="hint" id="tileDimsLabel">Tile: 500 x 500 px</span>
+        </div>
+
+        <div style="height:1px; background:var(--border); margin:6px 0;"></div>
+
+        <div class="field-row">
+          <label>Cols: <input type="number" id="cols" value="10"></label>
+          <label>Rows: <input type="number" id="rows" value="6"></label>
+        </div>
+        <div class="field-row">
+          <label>Gap X: <input type="number" id="gapX" value="0"></label>
+          <label>Gap Y: <input type="number" id="gapY" value="0"></label>
+        </div>
+        <div class="field-row" style="margin-top: 6px;">
+          <label><input type="checkbox" id="stagger" checked> Stagger Rows</label>
+          <label>Offset %: <input type="number" id="staggerOffset" value="50" style="width:40px;"></label>
+        </div>
+        
+        <!-- GENERATE 2X ROWS MIRRORED -->
+        <div class="field-row" style="margin-top: 6px; border-top: 1px solid var(--border); padding-top: 6px;">
+          <label title="Automatically generates 2x the rows and flips the bottom half to create a perfect floor reflection grid."><input type="checkbox" id="genReflGrid" checked> Generate 2x Rows (Mirrored Reflection)</label>
+        </div>
+        <div id="reflectionOpts" style="margin-top:2px;">
+           <div class="field-row">
+              <label title="Base Opacity of the Reflection">Opacity %: <input type="number" id="reflOpacity" value="50"></label>
+              <label title="Distance the reflection fades out">Fade %: <input type="number" id="reflFade" value="70"></label>
+           </div>
+           <div class="field-row">
+              <label title="Blur radius">Blur (px): <input type="number" id="reflBlur" value="5"></label>
+              <label title="Ripple effect">Wobble: <input type="number" id="reflWobble" value="2"></label>
+           </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Generation & Texture</h2>
+        <div class="field-row">
+          <label><input type="radio" name="mode" value="virtual" checked> Virtual Backdrop (1 Doc)</label>
+        </div>
+        <div class="field-row">
+          <label>Canvas Bg:</label>
+          <div id="cfCanvasBg" class="cf-container"></div>
+        </div>
+        <div class="field-row" style="margin-top:6px; border-top:1px solid var(--border); padding-top:6px;">
+          <label title="Applies PNGs from plugin assets folder as an overlay to each tile"><input type="checkbox" id="applyPaper"> Overlay Paper/Distress</label>
+          <label>Opacity %: <input type="number" id="paperOpacity" value="25"></label>
+        </div>
+        <div style="margin-top:10px;">
+          <button id="btnGenerate" class="btn primary" style="width:100%; padding: 10px;">GENERATE GRAPHICS</button>
+          <p id="canvasSizeHint" class="hint" style="text-align:center; margin-top:4px;"></p>
+        </div>
+      </div>
+
+      <!-- 3D WALL BUILDER -->
+      <div class="panel">
+        <h2>3D Wall Builder</h2>
+        <p class="hint" style="margin-bottom:8px;">Wraps the generated flat grid into a perspective wall. Run this after generating.</p>
+        <div class="field-row wall-type-toggle">
+           <label><input type="radio" name="wallType" value="single-left" checked><span>LEFT</span></label>
+           <label><input type="radio" name="wallType" value="single-right"><span>RIGHT</span></label>
+           <label><input type="radio" name="wallType" value="corner"><span>CORNER</span></label>
+        </div>
+
+        <div style="margin-top:8px; border-top:1px solid var(--border); padding-top:8px;">
+
+          <div class="wall-slider-group">
+            <div class="wall-slider-title">Lens / FOV</div>
+            <div class="wall-slider-row">
+              <span class="wall-slider-minmax">Telephoto</span>
+              <input type="range" id="fov" min="1" max="10" value="5" step="1">
+              <span class="wall-slider-minmax">Wide</span>
+              <input type="number" class="slider-num" id="fovInput" min="1" max="10" value="5" step="1">
+            </div>
+          </div>
+          <p class="hint" style="margin:2px 0 14px 0;">How much the far edge shrinks. Low = flat/subtle, High = dramatic depth.</p>
+
+          <div class="wall-slider-group">
+            <div class="wall-slider-title">Camera Height</div>
+            <div class="wall-slider-row">
+              <span class="wall-slider-minmax">Floor</span>
+              <input type="range" id="camHeight" min="0" max="100" value="50" step="1">
+              <span class="wall-slider-minmax">Ceiling</span>
+              <input type="number" class="slider-num" id="camHeightInput" min="0" max="100" value="50" step="1">
+            </div>
+          </div>
+          <p class="hint" style="margin:2px 0 14px 0;">Vertical eye position. 0 = looking up from floor, 50 = center, 100 = looking down from ceiling.</p>
+
+          <div class="wall-slider-group">
+            <div class="wall-slider-title">Wall Angle</div>
+            <div class="wall-slider-row">
+              <span class="wall-slider-minmax">Narrow</span>
+              <input type="range" id="wallAngle" min="10" max="100" value="70" step="1">
+              <span class="wall-slider-minmax">Flat</span>
+              <input type="number" class="slider-num" id="wallAngleInput" min="10" max="100" value="70" step="1">
+            </div>
+          </div>
+          <p class="hint" style="margin:2px 0 14px 0;">How far the wall turns away. 100 = facing you flat, lower = angled sharply away.</p>
+
+        </div>
+
+        <div class="field-row" style="margin-top: 6px;">
+           <label title="If your generated image is 2x tall due to a floor reflection, this shifts the perspective center to the wall/floor seam."><input type="checkbox" id="camAdjRefl" checked> Image includes Reflection (Auto-Adjust Center)</label>
+        </div>
+
+        <div style="margin-top:10px;">
+           <button id="btn3DWall" class="btn secondary" style="width:100%; padding: 8px;">Apply 3D Perspective</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TILE MANAGEMENT -->
+    <div class="col" style="flex: 1.8;">
+      <div class="panel" style="flex:1;">
+        <div style="display:flex; justify-content:flex-start; align-items:center; gap:10px; margin-bottom:8px;">
+          <h2>Tile Sequence</h2>
+          <button id="btnAddTile" class="btn secondary">+ Add Tile</button>
+        </div>
+        <p class="hint" style="margin-bottom:8px;">Tiles will be drawn in order, repeating continuously.</p>
+        
+        <div id="tileList"></div>
+
+        <div id="tileEditor" class="hidden">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h3 id="tileEditorTitle" style="margin:0; font-size:13px; color:#fff;">Edit Tile</h3>
+          </div>
+
+          <div class="live-preview-box">
+             <canvas id="tePreviewCanvas" width="400" height="150"></canvas>
+             <div id="tePreviewText"></div>
+          </div>
+          <button id="tePreviewBtn" class="preview-btn preview-btn-initial">Render Preview</button>
+
+          <div class="field-row">
+            <label>Type: 
+              <select id="teType">
+                <option value="phrase-single">Text - Single Line Center</option>
+                <option value="phrase-multiline">Text - Auto Multi-line Break</option>
+                <option value="phrase-fill">Text - Repeat Fill</option>
+                <option value="phrase-fillcolor">Text - Repeat Fill (Alt Colors)</option>
+                <option value="phrase-altwords">Text - Alt Words & Colors</option>
+                <option value="icon">Image/Icon - Center</option>
+                <option value="icon-grid">Image/Icon - Grid Pattern</option>
+                <option value="solid">Solid Color</option>
+                <option value="solid-framed">Framed Solid Color</option>
+                <option value="checkerboard">Checkerboard</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="teTextOpts" class="hidden" style="margin-top:10px; border-top:1px solid #444; padding-top:10px;">
+            <div class="field-row">
+              <label>Text 1: <input type="text" id="teText" value="TEXT"></label>
+            </div>
+            <div class="field-row" style="margin-top:6px;">
+              <label>Font: <input type="text" id="teFont" value="Arial Black"></label>
+              <label>Scale %: <input type="number" id="teTextScale" value="80"></label>
+            </div>
+            <div class="field-row" style="margin-top:8px;">
+              <div class="col">
+                <label>Text Color 1:</label>
+                <div id="cfTextColor" class="cf-container"></div>
+              </div>
+              <div class="col">
+                <label>Background 1:</label>
+                <div id="cfBgColor" class="cf-container"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="teAltWordOpts" class="hidden" style="margin-top:10px;">
+             <div class="field-row">
+              <label>Text 2: <input type="text" id="teText2" value="TEXT 2"></label>
+            </div>
+          </div>
+
+          <div id="teAltColorOpts" class="hidden" style="margin-top:10px;">
+             <div class="field-row">
+              <div class="col">
+                <label>Text Color 2:</label>
+                <div id="cfAltTextColor" class="cf-container"></div>
+              </div>
+              <div class="col">
+                <label>Background 2:</label>
+                <div id="cfAltBgColor" class="cf-container"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="teIconOpts" class="hidden" style="margin-top:10px; border-top:1px solid #444; padding-top:10px;">
+            <div class="field-row">
+              <button id="teBrowseIcon" class="btn">Browse PNG/JPG...</button>
+              <span id="teIconName" class="hint">No file chosen</span>
+            </div>
+            <div class="field-row" style="margin-top:8px;">
+              <div class="col">
+                <label>Background:</label>
+                <div id="cfIconBg" class="cf-container"></div>
+              </div>
+              <div class="col">
+                <label>Padding (px): <input type="number" id="teIconPad" value="20"></label>
+              </div>
+            </div>
+          </div>
+
+          <div id="teGridDivOpts" class="hidden" style="margin-top:10px;">
+             <div class="field-row">
+              <label title="Number of divisions (e.g. 2 means 2x2 grid)">Grid Divs: <input type="number" id="teGridDivs" value="2" min="1"></label>
+             </div>
+          </div>
+
+          <div id="teSolidOpts" class="hidden" style="margin-top:10px; border-top:1px solid #444; padding-top:10px;">
+            <div class="field-row">
+              <div class="col">
+                <label>Main Color:</label>
+                <div id="cfSolidColor" class="cf-container"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="teFrameOpts" class="hidden" style="margin-top:10px;">
+            <div class="field-row">
+              <div class="col">
+                <label>Frame Color:</label>
+                <div id="cfFrameColor" class="cf-container"></div>
+              </div>
+              <div class="col">
+                <label>Thickness %: <input type="number" id="teFrameThick" value="10"></label>
+              </div>
+            </div>
+          </div>
+
+          <div id="teCheckOpts" class="hidden" style="margin-top:10px; border-top:1px solid #444; padding-top:10px;">
+             <div class="field-row">
+              <div class="col">
+                <label>Color A:</label>
+                <div id="cfCheckA" class="cf-container"></div>
+              </div>
+              <div class="col">
+                <label>Color B:</label>
+                <div id="cfCheckB" class="cf-container"></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:15px; border-top:1px solid #444; padding-top:10px;">
+            <button id="teCancel" class="btn">Cancel</button>
+            <button id="teSave" class="btn primary">Save Tile</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+  <!-- Color Picker Modal -->
+  <div id="pickerPopup" class="hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <h3 style="margin:0; font-size:12px; color:#fff;">Pick Color</h3>
+    </div>
+    <!-- HONEYCOMB QUICK-SELECT -->
+    <p class="hint" style="text-align:center; margin:0 0 4px 0;">Click a hex cell for a quick base color</p>
+    <div id="honeycombContainer">
+      <canvas id="honeycombCanvas"></canvas>
+    </div>
+    <!-- FINE-TUNE SQUARE -->
+    <p class="hint" style="text-align:center; margin:0;">Fine-tune: drag to adjust hue, tint and shade</p>
+    <div id="pickerSquareContainer">
+      <canvas id="pickerSquare"></canvas>
+      <div id="pickerMarker"></div>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div id="pickerPreview" style="width:24px; height:24px; border:1px solid #000; border-radius:3px;"></div>
+        <span id="pickerHexLabel" style="font-family:monospace; font-size:12px;">#000000</span>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button id="pickerClose" class="btn">Cancel</button>
+        <button id="pickerAdd" class="btn primary">Use Color</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="dist.js"></script>
+
+</div>
+
+<!-- EXPORT VIEW -->
+<div id="viewExport" class="tab-content" style="display:none; padding: 12px;">
+  <h2>Batch Export High-Resolution Tiles</h2>
+  <fieldset style="border:1px solid #555; padding:10px; margin-bottom:12px; border-radius: 4px;">
+    <legend style="color:#aaa; font-size:12px; font-weight:bold;">Export Settings</legend>
+    <div style="display:flex; gap:12px; margin-bottom:12px;">
+      <label style="font-size:12px; color:#ccc;">Long Edge (px): <input type="number" id="expLongEdge" value="3000" style="background:#3a3a3a; color:#fff; border:1px solid #666; padding:4px; width:70px; border-radius:3px;"></label>
+      <label style="font-size:12px; color:#ccc;">DPI: <input type="number" id="expDpi" value="300" style="background:#3a3a3a; color:#fff; border:1px solid #666; padding:4px; width:60px; border-radius:3px;"></label>
+    </div>
+    <div style="margin-bottom:8px;">
+      <button id="btnSelectExportFolder" onclick="selectExportFolder()" style="background:#444; border:1px solid #666; color:#eee; padding:8px 12px; cursor:pointer; font-weight:bold; border-radius:4px; transition: background 0.15s;">1. Choose Output Folder...</button>
+    </div>
+    <div id="expFolderLabel" style="font-size:10px; color:#777; margin-bottom:12px;">No folder selected.</div>
+
+    <div style="height:1px; background:#555; margin:12px 0;"></div>
+
+    <button id="btnExportTiles" onclick="exportHiResTiles()" disabled style="background:#2680eb; color:#fff; padding:10px 16px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; width:100%; font-size: 14px; transition: background 0.15s;">
+      2. Export All Tiles as PNG
+    </button>
+  </fieldset>
+</div>
+
+<!-- LICENSE VIEW -->
+<div id="viewLicense" class="tab-content" style="display:none; padding: 12px;">
+  <h2>License</h2>
+  <div id="licCurrentStatus" style="margin:0 0 10px; padding:8px 10px; background:#1e1e1e; border:1px solid #555; border-radius:4px; color:#fff; font-weight:700;">
+    Checking license status…
+  </div>
+  <div class="panel">
+    <div style="margin-bottom:12px;">
+      <label style="display:block; margin-bottom:6px; color:#ccc; font-size:11px; font-weight:bold;">License Key</label>
+      <div style="display:flex; gap:6px;">
+        <input type="text" id="licKeyInput" placeholder="XXXX-XXXX-XXXX-XXXX"
+          style="flex:1; font-family:monospace; background:#1e1e1e; color:#fff; border:1px solid #555; border-radius:3px; padding:5px 8px; font-size:12px;">
+        <button id="btnActivateLic" class="btn primary">Activate</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:6px; margin-bottom:14px;">
+      <button id="btnValidateLic" class="btn">Validate / Refresh</button>
+      <button id="btnDeactivateLic" class="btn">Deactivate</button>
+    </div>
+
+    <div id="licStatus"
+      style="background:#1e1e1e; border:1px solid #444; border-radius:4px; padding:10px; font-size:11px; color:#aaa; min-height:64px; line-height:1.8;">
+      <em>No license data loaded.</em>
+    </div>
+  </div>
+</div>
+</body>
+</html>

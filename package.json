@@ -1,0 +1,17 @@
+{
+  "name": "steprepeat",
+  "version": "3.2.0",
+  "description": "Photoshop UXP Step & Repeat Grid plugin",
+  "private": true,
+  "scripts": {
+    "build": "esbuild main.js --bundle --external:photoshop --external:uxp --external:os --outfile=dist.js --format=cjs --platform=node",
+    "watch": "esbuild main.js --bundle --external:photoshop --external:uxp --external:os --outfile=dist.js --format=cjs --platform=node --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  },
+  "dependencies": {
+    "jpeg-js": "^0.4.4",
+    "upng-js": "^2.1.0"
+  }
+}
